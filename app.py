@@ -288,6 +288,16 @@ def _open_browser():
         pass
 
 
+def _arg_value(flag: str) -> str | None:
+    """取 `--flag value` 或 `--flag=value` 的值。"""
+    for i, a in enumerate(sys.argv):
+        if a == flag and i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
+        if a.startswith(flag + "="):
+            return a.split("=", 1)[1]
+    return None
+
+
 def _lan_ips() -> list[str]:
     """本机的局域网 IPv4，用来提示别的主机该访问哪个地址。"""
     import socket
@@ -323,6 +333,28 @@ if __name__ == "__main__":
     # 开机自启/后台常驻时不要弹浏览器
     no_browser = "--no-browser" in sys.argv or os.environ.get("SKU_NO_BROWSER") == "1"
 
+    # 后台无窗口跑的时候把输出落盘，否则崩了什么都看不到
+    log_path = _arg_value("--log") or os.environ.get("SKU_LOG")
+    if log_path:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)) or ".", exist_ok=True)
+        log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log_file
+        print(f"\n===== 启动 {__import__('datetime').datetime.now():%Y-%m-%d %H:%M:%S} =====")
+
+    # 改代码自动重启。模板和静态文件不用重启 —— 关掉缓存后刷新浏览器即可生效。
+    reload_on = "--reload" in sys.argv or os.environ.get("SKU_RELOAD") == "1"
+    extra_files = None
+    if reload_on:
+        app.config["TEMPLATES_AUTO_RELOAD"] = True
+        app.jinja_env.auto_reload = True
+        app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+        # 显式列出本项目的 .py：printing/label/ocr 是延迟导入的，
+        # 首次请求之前不在 sys.modules 里，reloader 看不到它们
+        extra_files = [
+            os.path.join(BASE_DIR, f)
+            for f in ("app.py", "ocr.py", "label.py", "printing.py", "config.json")
+        ]
+
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):
         threading.Timer(1.2, _open_browser).start()
 
@@ -335,5 +367,9 @@ if __name__ == "__main__":
         print(f'      New-NetFirewallRule -DisplayName "SKU Barcode Printer" '
               f'-Direction Inbound -Protocol TCP -LocalPort {PORT} -Action Allow')
         print("\n  注意：同一网段的任何人打开这个地址都能直接驱动打印机出纸。")
+    if reload_on:
+        print("\n  自动重载已开启：改 .py 会自动重启；改模板/前端刷新浏览器即可。")
     print()
-    app.run(host=host, port=PORT, debug=False)
+    # debug 一直保持 False：Werkzeug 的调试器能在页面上执行任意代码，
+    # 对局域网开放时绝不能开。只借用它的 reloader。
+    app.run(host=host, port=PORT, debug=False, use_reloader=reload_on, extra_files=extra_files)

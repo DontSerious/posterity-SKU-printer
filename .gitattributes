@@ -1,0 +1,5 @@
+* text=auto
+
+# Windows 脚本必须是 CRLF，否则 cmd / PowerShell 解析会出问题
+*.bat text eol=crlf
+*.ps1 text eol=crlf

@@ -6,3 +6,5 @@ __pycache__/
 
 # 干跑生成的标签 PNG
 output/
+
+logs/

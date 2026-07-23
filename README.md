@@ -52,9 +52,30 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 |---|---|
 | `.\install-autostart.ps1` | 当前用户登录时启动（默认，推荐） |
 | `.\install-autostart.ps1 -AtStartup` | 开机即启动，以 SYSTEM 身份跑，不需要有人登录 |
+| `.\install-autostart.ps1 -AutoReload` | 改代码后服务自动重启（见下） |
 | `.\install-autostart.ps1 -NoFirewall` | 不动防火墙 |
-| `Restart-ScheduledTask -TaskName "SKU Barcode Printer"` | 改完 config.json 后重启服务 |
+| `Restart-ScheduledTask -TaskName "SKU Barcode Printer"` | 手动重启服务 |
 | `.\uninstall-autostart.ps1` | 卸载（删任务 + 关端口） |
+
+后台服务的输出会写到 `logs/service.log`，服务起不来时先看这个。
+
+### 改代码自动重新部署
+
+加 `--reload`（后台服务用 `-AutoReload`）：
+
+| 改了什么 | 生效方式 |
+|---|---|
+| `app.py` / `ocr.py` / `label.py` / `printing.py` / `config.json` | **自动重启服务**，几秒后生效 |
+| `templates/*.html`、`static/*.js`、`static/*.css` | **不用重启**，浏览器刷新即可（静态文件已关缓存） |
+
+```powershell
+# 开发时手动跑
+.venv\Scripts\python.exe app.py --reload
+```
+
+> `--reload` 只借用 Werkzeug 的文件监视器，**没有开 debug 模式** —— Werkzeug 的调试器能从网页执行任意代码，对局域网开放时绝不能开。
+>
+> 保存了带语法错误的文件时，服务会停在错误状态直到你改对；后台跑的时候没有控制台，报错在 `logs/service.log` 里。
 
 > `-AtStartup` 用 SYSTEM 身份运行在 session 0，个别厂商驱动在该会话下打印会有问题。默认的「登录时启动」打印最稳，代价是这台机器需要保持登录状态。先用默认的，真不行再换 `-AtStartup`。
 >

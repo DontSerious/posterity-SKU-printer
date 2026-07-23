@@ -12,6 +12,7 @@
 [CmdletBinding()]
 param(
     [switch]$AtStartup,          # 开机启动（SYSTEM），而不是登录时启动
+    [switch]$AutoReload,         # 改 .py 后自动重启服务
     [int]$Port = 5000,
     [switch]$NoFirewall          # 不动防火墙
 )
@@ -46,8 +47,9 @@ if (-not (Test-Path $Pythonw)) {
 Ok "解释器: $Pythonw"
 
 # --- 计划任务 -------------------------------------------------------------
-$action = New-ScheduledTaskAction -Execute $Pythonw `
-    -Argument 'app.py --lan --no-browser' -WorkingDirectory $Dir
+$argLine = 'app.py --lan --no-browser --log logs\service.log'
+if ($AutoReload) { $argLine += ' --reload' }
+$action = New-ScheduledTaskAction -Execute $Pythonw -Argument $argLine -WorkingDirectory $Dir
 
 if ($AtStartup) {
     $trigger   = New-ScheduledTaskTrigger -AtStartup
@@ -101,7 +103,13 @@ if ($live) {
     foreach ($ip in $ips) { Write-Host ("      http://{0}:{1}    ({2})" -f $ip.IPAddress, $Port, $ip.InterfaceAlias) -ForegroundColor Cyan }
     Write-Host ''
     Info '重启后会自动拉起，不会有窗口弹出。'
-    Info "改配置后重启服务： Restart-ScheduledTask -TaskName '$TaskName'"
+    if ($AutoReload) {
+        Info '自动重载已开启：改 .py 自动重启，改模板/前端刷新浏览器即可。'
+    } else {
+        Info "改完代码重启服务： Restart-ScheduledTask -TaskName '$TaskName'"
+        Info '（想让它自己重启，重装时加 -AutoReload）'
+    }
+    Info "日志：             $Dir\logs\service.log"
     Info "卸载：             .\uninstall-autostart.ps1"
 } else {
     Fail "任务已注册但端口 $Port 起不来。看一下任务计划程序里「$TaskName」的上次运行结果。"
