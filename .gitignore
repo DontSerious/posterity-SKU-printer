@@ -1,0 +1,8 @@
+# 虚拟环境由 uv sync 从 pyproject.toml + uv.lock 重建
+.venv/
+
+__pycache__/
+*.pyc
+
+# 干跑生成的标签 PNG
+output/

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>SKU 条码打印</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <h1 data-i18n="app.title">SKU 条码打印</h1>
+  <span class="steps" data-i18n="app.steps">① 上传截图 / 粘贴文本 → ② 左右对照核对 → ③ 确定打印</span>
+  <button id="lang" class="lang" title="切换语言 / Switch language">EN</button>
+</header>
+
+<main>
+  <!-- ===== 上半：左截图 / 右列表，左右对照 ===== -->
+  <div class="top">
+    <section class="source">
+      <div class="tabs">
+        <button class="tab on" data-tab="img" data-i18n="tab.img">上传截图</button>
+        <button class="tab" data-tab="txt" data-i18n="tab.txt">粘贴文本</button>
+      </div>
+
+      <div id="paneImg">
+        <div id="drop" class="drop">
+          <input type="file" id="file" accept="image/*" hidden>
+          <p class="big" data-i18n="drop.big">把订单表格截图拖到这里</p>
+          <p class="hint" data-i18n-html="drop.hint">或 <b>点击选择文件</b>，或直接按 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴截图</p>
+        </div>
+
+        <div id="shot" class="shot hidden">
+          <div class="shotbar">
+            <span class="hint" data-i18n="shot.zoomhint">点图片可放大到原始尺寸，方便逐行核对</span>
+            <button id="reupload" class="link" data-i18n="shot.reupload">重新上传</button>
+          </div>
+          <div id="shotBox" class="shotbox">
+            <img id="shotImg" alt="screenshot">
+          </div>
+        </div>
+      </div>
+
+      <div id="paneTxt" class="hidden">
+        <textarea id="text" spellcheck="false" data-i18n-ph="txt.placeholder"></textarea>
+        <p class="hint" data-i18n-html="txt.hint"></p>
+        <button id="parseText" class="secondary narrow">
+          <span data-i18n="txt.parse">解析文本</span> <span class="kbdhint">Ctrl+Enter</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="list">
+      <div class="listhead">
+        <h2 data-i18n="list.title">核对列表</h2>
+        <button id="addRow" class="link" data-i18n="list.add">+ 手动加一行</button>
+      </div>
+
+      <div id="status" class="status hidden"></div>
+
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th class="c-chk"><input type="checkbox" id="chkAll" checked></th>
+              <th class="c-desc" data-i18n="col.desc">描述</th>
+              <th class="c-sku">SKU</th>
+              <th class="c-qty" data-i18n="col.qty">数量</th>
+              <th class="c-op"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <p id="empty" class="empty" data-i18n="list.empty">还没有数据 —— 先在左边上传截图或粘贴文本</p>
+      </div>
+
+      <details id="rawWrap" class="raw hidden">
+        <summary id="rawSummary"></summary>
+        <pre id="rawText"></pre>
+      </details>
+    </section>
+  </div>
+
+  <!-- ===== 下半：打印设置 ===== -->
+  <section class="settings">
+    <div class="col">
+      <h2 data-i18n="set.print">打印设置</h2>
+      <label><span data-i18n="set.printer">打印机</span>
+        <select id="printer"></select>
+      </label>
+      <label><span data-i18n="set.paper">标签纸</span>
+        <select id="paper"></select>
+      </label>
+      <div id="customSize" class="row2">
+        <label><span data-i18n="set.wmm">宽 mm</span><input type="number" id="wmm" step="0.1" min="10" value="60"></label>
+        <label><span data-i18n="set.hmm">高 mm</span><input type="number" id="hmm" step="0.1" min="10" value="30"></label>
+      </div>
+      <div class="row2">
+        <label><span data-i18n="set.rotate">旋转</span>
+          <select id="rotate">
+            <option value="0">0°</option>
+            <option value="90">90°</option>
+            <option value="180">180°</option>
+            <option value="270">270°</option>
+          </select>
+        </label>
+        <label><span data-i18n="set.module">模块宽 px</span>
+          <select id="modulepx">
+            <option value="0" data-i18n="set.auto">自动</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="col">
+      <h2 data-i18n="set.layout">版式微调</h2>
+      <label><span data-i18n="set.margin">左右留白</span> <span class="v" id="vmargin">3mm</span>
+        <input type="range" id="marginx" min="0" max="12" step="0.5" value="3"></label>
+      <label><span data-i18n="set.top">条码距顶</span> <span class="v" id="vtop">8.5%</span>
+        <input type="range" id="btop" min="0" max="30" step="0.5" value="8.5"></label>
+      <label><span data-i18n="set.bh">条码高度</span> <span class="v" id="vbh">67%</span>
+        <input type="range" id="bheight" min="20" max="85" step="1" value="67"></label>
+      <label><span data-i18n="set.th">文字高度</span> <span class="v" id="vth">12%</span>
+        <input type="range" id="theight" min="0" max="25" step="0.5" value="12"></label>
+      <label class="inline"><input type="checkbox" id="showtext" checked> <span data-i18n="set.showtext">显示 SKU 文字</span></label>
+    </div>
+
+    <div class="col">
+      <h2 data-i18n="set.preview">标签预览</h2>
+      <div class="preview">
+        <img id="preview" alt="label preview">
+      </div>
+      <p class="hint" id="binfo"></p>
+    </div>
+
+    <div class="col action">
+      <h2 data-i18n="set.go">打印</h2>
+      <p id="summary" class="summary"></p>
+      <button id="print" class="primary" data-i18n="btn.print">确定打印</button>
+      <button id="dry" class="secondary" data-i18n="btn.dry">干跑（只存 PNG，不出纸）</button>
+      <p id="printResult" class="result"></p>
+    </div>
+  </section>
+</main>
+
+<script src="{{ url_for('static', filename='i18n.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
