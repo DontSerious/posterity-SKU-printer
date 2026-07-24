@@ -86,15 +86,24 @@ _ALPHA_TO_DIGIT = str.maketrans({"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1
 _DIGIT_TO_ALPHA = str.maketrans({"0": "O", "1": "I", "5": "S", "8": "B", "2": "Z"})
 
 
-def normalize_sku(text: str) -> str:
-    """清洗 OCR 出来的 SKU：统一破折号/形近字、去空格，再按段纠正易混字。"""
-    s = text.strip().upper().translate(_HOMOGLYPHS)
+def normalize_sku(text: str, correct_ocr: bool = True) -> str:
+    """清洗 SKU：统一破折号、去空格。
+
+    correct_ocr=True（图片 OCR）时额外按段纠正易混字（O↔0、S↔5…）。
+    粘贴文本是人打的、没有形近错误，必须传 False —— 否则会把 `80-SS-BK`
+    的首段 `80` 误判成字母前缀改成 `BO`。
+    """
+    s = text.strip().upper()
+    if correct_ocr:
+        s = s.translate(_HOMOGLYPHS)  # 西里尔/希腊形近字，也只对 OCR 有意义
     for d in _DASHES:
         s = s.replace(d, "-")
     s = re.sub(r"[^\w\-]", "", s)
     s = s.replace(" ", "").strip("-")
     if not s:
         return ""
+    if not correct_ocr:
+        return s
 
     segs = s.split("-")
     last = len(segs) - 1
@@ -116,12 +125,12 @@ def normalize_sku(text: str) -> str:
     return "-".join(fixed)
 
 
-def _looks_like_sku(text: str, pattern: re.Pattern) -> str | None:
+def _looks_like_sku(text: str, pattern: re.Pattern, correct_ocr: bool = True) -> str | None:
     # 乘号/星号永远不会出现在 SKU 里，别让 normalize 把它默默吃掉
     # （PHC-ELE-BK×5 若被吃掉会变成 PHC-ELE-BKS 这种假 SKU）
     if any(c in text for c in "×✕*"):
         return None
-    cand = normalize_sku(text)
+    cand = normalize_sku(text, correct_ocr=correct_ocr)
     if cand and pattern.match(cand):
         return cand
     return None
@@ -295,7 +304,8 @@ def _split_tokens(line: str, pattern: re.Pattern) -> list[str]:
     out = []
     for t in tokens:
         m = _ATTACHED_QTY_RE.match(t)
-        if m and "-" in m.group(1) and not m.group(1).endswith("-") and _looks_like_sku(m.group(1), pattern):
+        if m and "-" in m.group(1) and not m.group(1).endswith("-") \
+                and _looks_like_sku(m.group(1), pattern, correct_ocr=False):
             out.append(m.group(1))
             out.append("X" + m.group(3))
         else:
@@ -337,7 +347,7 @@ def parse_text(text: str, sku_regex: str = DEFAULT_SKU_REGEX) -> dict:
         sku_idx = None
         sku_val = None
         for i, t in enumerate(tokens):
-            cand = _looks_like_sku(t, pattern)
+            cand = _looks_like_sku(t, pattern, correct_ocr=False)  # 粘贴文本不做形近纠正
             if cand:
                 sku_idx, sku_val = i, cand
                 break
