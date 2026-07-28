@@ -133,6 +133,8 @@ tr.active td { background: #eef4ff; }
 
 .settings label { display: block; margin: 10px 0; font-size: 12px; color: #5b646f; }
 .settings label.inline { display: flex; align-items: center; gap: 6px; }
+.settings label.mode { font-weight: 600; color: #1c2024; margin-bottom: 12px; }
+.settings label.off { opacity: .4; }
 select, input[type=number] {
   width: 100%; margin-top: 4px; padding: 6px 8px;
   border: 1px solid #dde2e8; border-radius: 5px; font: inherit; background: #fff;

@@ -102,7 +102,7 @@
             <option value="270">270°</option>
           </select>
         </label>
-        <label><span data-i18n="set.module">模块宽 px</span>
+        <label id="lbModule"><span data-i18n="set.module">模块宽 px</span>
           <select id="modulepx">
             <option value="0" data-i18n="set.auto">自动</option>
             <option value="1">1</option>
@@ -116,15 +116,18 @@
 
     <div class="col">
       <h2 data-i18n="set.layout">版式微调</h2>
+      <label class="inline mode"><input type="checkbox" id="textonly"> <span data-i18n="set.textonly">只印文字（不生成条码）</span></label>
+      <label id="lbFill"><span data-i18n="set.textfill">文字纵向铺满</span> <span class="v" id="vfill">自动</span>
+        <input type="range" id="textfill" min="0" max="100" step="5" value="0"></label>
       <label><span data-i18n="set.margin">左右留白</span> <span class="v" id="vmargin">3mm</span>
         <input type="range" id="marginx" min="0" max="12" step="0.5" value="3"></label>
-      <label><span data-i18n="set.top">条码距顶</span> <span class="v" id="vtop">8.5%</span>
+      <label id="lbTop"><span data-i18n="set.top">条码距顶</span> <span class="v" id="vtop">8.5%</span>
         <input type="range" id="btop" min="0" max="30" step="0.5" value="8.5"></label>
-      <label><span data-i18n="set.bh">条码高度</span> <span class="v" id="vbh">67%</span>
+      <label id="lbBh"><span data-i18n="set.bh">条码高度</span> <span class="v" id="vbh">67%</span>
         <input type="range" id="bheight" min="20" max="85" step="1" value="67"></label>
-      <label><span data-i18n="set.th">文字高度</span> <span class="v" id="vth">12%</span>
+      <label id="lbTh"><span data-i18n="set.th">文字高度</span> <span class="v" id="vth">12%</span>
         <input type="range" id="theight" min="0" max="25" step="0.5" value="12"></label>
-      <label class="inline"><input type="checkbox" id="showtext" checked> <span data-i18n="set.showtext">显示 SKU 文字</span></label>
+      <label class="inline" id="lbShow"><input type="checkbox" id="showtext" checked> <span data-i18n="set.showtext">显示 SKU 文字</span></label>
     </div>
 
     <div class="col">

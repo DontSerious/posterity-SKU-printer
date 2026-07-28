@@ -40,6 +40,8 @@ const I18N = {
     'set.bh': '条码高度',
     'set.th': '文字高度',
     'set.showtext': '显示 SKU 文字',
+    'set.textonly': '只印文字（不生成条码）',
+    'set.textfill': '文字纵向铺满',
     'set.preview': '标签预览',
     'set.go': '打印',
     'paper.custom': '自定义尺寸（默认 60 × 30 mm）',
@@ -67,6 +69,7 @@ const I18N = {
     'dry.done': (n, t, files) => `已生成 ${n} 个 PNG（合计 ${t} 张）：\n${files}`,
 
     'bar.info': (m, px, bw, mg) => `${m} 模块 × ${px}px = 条码宽 ${bw}mm，实际边距 ${mg}mm`,
+    'bar.textonly': '只印文字模式：不生成条码，字号按宽度自动撑满；拉「文字纵向铺满」可把字上下拉高，100% = 铺满整张纸',
     'bar.quiet': '⚠ 静区不足，建议加大左右留白',
     'bar.narrow': '⚠ 窄条只有 1 点(0.125mm)，已到打印头极限，扫码可能不稳 —— 建议减小左右留白或换更宽的标签纸',
     'preview.fail': (e) => '预览失败：' + e,
@@ -112,6 +115,8 @@ const I18N = {
     'set.bh': 'Barcode height',
     'set.th': 'Text height',
     'set.showtext': 'Show SKU text',
+    'set.textonly': 'Text only (no barcode)',
+    'set.textfill': 'Vertical fill',
     'set.preview': 'Label preview',
     'set.go': 'Print',
     'paper.custom': 'Custom size (default 60 × 30 mm)',
@@ -139,6 +144,7 @@ const I18N = {
     'dry.done': (n, t, files) => `Generated ${n} PNGs (${t} labels total):\n${files}`,
 
     'bar.info': (m, px, bw, mg) => `${m} modules × ${px}px = ${bw}mm wide, ${mg}mm actual margin`,
+    'bar.textonly': 'Text-only mode: no barcode, font size fills the width; drag "Vertical fill" to stretch the text — 100% fills the whole label',
     'bar.quiet': '⚠ Quiet zone too small — increase the side margin',
     'bar.narrow': '⚠ Narrow bars are only 1 dot (0.125mm), the print head limit; scanning may be unreliable — reduce the side margin or use wider stock',
     'preview.fail': (e) => 'Preview failed: ' + e,

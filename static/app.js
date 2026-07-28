@@ -33,6 +33,7 @@ function applyI18n() {
   $('lang').textContent = t('app.langbtn');
 
   // 动态生成的部分要重画
+  syncRangeLabels();  // 「自动」这类值标签不是 data-i18n，得自己刷
   renderPaperOptions();
   renderPrinterOptions();
   renderTable();
@@ -58,7 +59,23 @@ function layout() {
     text_height_pct: parseFloat($('theight').value),
     module_px: parseInt($('modulepx').value, 10),
     show_text: $('showtext').checked,
+    text_only: $('textonly').checked,
+    text_fill_pct: parseFloat($('textfill').value),
   };
+}
+
+// 只印文字时，条码相关的控件全部失效 —— 留着能点会让人以为还有条码
+const BARCODE_ONLY = [['lbModule', 'modulepx'], ['lbTop', 'btop'], ['lbBh', 'bheight'],
+                      ['lbTh', 'theight'], ['lbShow', 'showtext']];
+
+function syncTextOnly() {
+  const on = $('textonly').checked;
+  BARCODE_ONLY.forEach(([lb, inp]) => {
+    $(lb).classList.toggle('off', on);
+    $(inp).disabled = on;
+  });
+  $('lbFill').classList.toggle('off', !on);  // 纵向铺满只在只印文字时有意义
+  $('textfill').disabled = !on;
 }
 
 function paperSpec() {
@@ -116,10 +133,13 @@ function applyConfig(cfg) {
   if (L.barcode_height_pct !== undefined) $('bheight').value = L.barcode_height_pct;
   if (L.text_height_pct !== undefined) $('theight').value = L.text_height_pct;
   if (L.show_text !== undefined) $('showtext').checked = !!L.show_text;
+  if (L.text_only !== undefined) $('textonly').checked = !!L.text_only;
+  if (L.text_fill_pct !== undefined) $('textfill').value = L.text_fill_pct;
   const P = cfg.paper || {};
   if (P.width_mm) $('wmm').value = P.width_mm;
   if (P.height_mm) $('hmm').value = P.height_mm;
   syncRangeLabels();
+  syncTextOnly();
 }
 
 function renderPaperOptions() {
@@ -344,7 +364,9 @@ async function doPreview() {
     if (!res.ok) { $('binfo').textContent = t('preview.fail', (await res.json()).error); return; }
     $('preview').src = URL.createObjectURL(await res.blob());
     const info = await (await fetch('/api/barcode-info', opts)).json();
-    if (info.ok) {
+    if (info.ok && info.text_only) {
+      $('binfo').textContent = t('bar.textonly');
+    } else if (info.ok) {
       let msg = t('bar.info', info.modules, info.module_px, info.barcode_width_mm, info.actual_margin_mm);
       if (!info.quiet_zone_ok) msg += '\n' + t('bar.quiet');
       if (info.narrow) msg += '\n' + t('bar.narrow');
@@ -409,6 +431,8 @@ function syncRangeLabels() {
   $('vtop').textContent = $('btop').value + '%';
   $('vbh').textContent = $('bheight').value + '%';
   $('vth').textContent = $('theight').value + '%';
+  const fill = parseFloat($('textfill').value);
+  $('vfill').textContent = fill > 0 ? fill + '%' : t('set.auto');
 }
 
 function bind() {
@@ -453,9 +477,10 @@ function bind() {
 
   $('printer').addEventListener('change', (e) => loadPapers(e.target.value, null));
   $('paper').addEventListener('change', onPaperChange);
+  $('textonly').addEventListener('change', () => { syncTextOnly(); refreshPreview(); });
   ['wmm', 'hmm', 'rotate', 'modulepx', 'showtext'].forEach((id) =>
     $(id).addEventListener('change', refreshPreview));
-  ['marginx', 'btop', 'bheight', 'theight'].forEach((id) =>
+  ['marginx', 'btop', 'bheight', 'theight', 'textfill'].forEach((id) =>
     $(id).addEventListener('input', () => { syncRangeLabels(); refreshPreview(); }));
 
   $('chkAll').addEventListener('change', (e) => {

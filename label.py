@@ -36,6 +36,8 @@ class Layout:
     text_height_pct: float = 12.0    # SKU 文字高度
     module_px: int = 0               # 0 = 自动选最大可用整数模块宽
     show_text: bool = True
+    text_only: bool = False          # 只印文字，不生成条码
+    text_fill_pct: float = 0.0       # 只印文字时纵向拉伸到占标签高度的百分比；0 = 自动（保持字形比例）
 
     @classmethod
     def from_dict(cls, d: dict | None) -> "Layout":
@@ -116,7 +118,41 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int):
 # 渲染
 # --------------------------------------------------------------------------- #
 
+def _render_text_only(text: str, w: int, h: int, layout: Layout) -> Image.Image:
+    """只印文字：字号自动撑满可用区域，居中。"""
+    img = Image.new("1", (w, h), 1)
+    draw = ImageDraw.Draw(img)
+    if not text:
+        return img
+
+    margin_x = mm_to_px(layout.margin_x_mm) if layout.margin_x_mm > 0 else 0
+    box_w = max(1, w - 2 * margin_x)
+    box_h = max(1, h - 2 * max(1, int(round(h * 0.06))))  # 上下各留一点，别顶边
+
+    font, tw, th, off_l, off_t = _fit_font(draw, text, box_w, box_h)
+
+    fill = float(layout.text_fill_pct or 0)
+    if fill <= 0:  # 自动：保持字形比例，只按宽度撑满
+        draw.text(((w - tw) // 2 - off_l, (h - th) // 2 - off_t), text, font=font, fill=0)
+        return img
+
+    # 纵向拉伸：字形只能等比缩放，所以把文字画成蒙版再非等比缩到目标高度。
+    # 先按 4 倍字号画大图，全程降采样 —— 直接放大会把边缘搓成锯齿。
+    target_h = max(1, min(h, int(round(h * fill / 100.0))))
+    big = _load_font(min(800, max(8, int((getattr(font, "size", 0) or 12) * 4))))
+    l, t, r, b = draw.textbbox((0, 0), text, font=big)
+    tmp = Image.new("L", (max(1, r - l), max(1, b - t)), 0)
+    ImageDraw.Draw(tmp).text((-l, -t), text, font=big, fill=255)
+    tmp = tmp.resize((tw, target_h), Image.LANCZOS)
+    mask = tmp.point(lambda v: 255 if v >= 128 else 0).convert("1")
+    img.paste(0, ((w - tw) // 2, (h - target_h) // 2), mask)
+    return img
+
+
 def _render_content(sku: str, w: int, h: int, layout: Layout) -> Image.Image:
+    if layout.text_only:
+        return _render_text_only(sku, w, h, layout)
+
     img = Image.new("1", (w, h), 1)  # 1 = 白
     draw = ImageDraw.Draw(img)
 
@@ -208,6 +244,22 @@ def barcode_info(sku: str, width_mm: float, layout: Layout | dict | None = None)
     """给前端提示用：模块数、实际模块宽、条码占用宽度(mm)。"""
     if isinstance(layout, dict) or layout is None:
         layout = Layout.from_dict(layout)
+    if layout.text_only:
+        # 没有条码，静区/模块宽这些指标都不适用
+        return {
+            "text_only": True,
+            "modules": 0,
+            "module_px": 0,
+            "barcode_width_mm": 0.0,
+            "avail_width_mm": round(
+                max(1, mm_to_px(width_mm) - 2 * (mm_to_px(layout.margin_x_mm) if layout.margin_x_mm > 0 else 0))
+                / DPI * 25.4, 2),
+            "actual_margin_mm": round(layout.margin_x_mm, 2),
+            "fill_pct": 0.0,
+            "overflow": False,
+            "quiet_zone_ok": True,
+            "narrow": False,
+        }
     n = len(code128_modules(sku))
     w = mm_to_px(width_mm)
     margin_x = mm_to_px(layout.margin_x_mm) if layout.margin_x_mm > 0 else 0
