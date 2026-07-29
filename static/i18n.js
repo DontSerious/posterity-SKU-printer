@@ -34,6 +34,7 @@ const I18N = {
     'set.rotate': '旋转',
     'set.module': '模块宽 px',
     'set.auto': '自动',
+    'set.fill': '填满',
     'set.layout': '版式微调',
     'set.margin': '左右留白 mm',
     'set.top': '条码距顶',
@@ -70,6 +71,8 @@ const I18N = {
 
     'bar.info': (m, px, bw, mg) => `${m} 模块 × ${px}px = 条码宽 ${bw}mm，实际边距 ${mg}mm`,
     'bar.textonly': '只印文字模式：不生成条码，字号按宽度自动撑满；拉「文字纵向铺满」可把字上下拉高，100% = 铺满整张纸',
+    'bar.fractional': (mil, lo, hi) => `模块宽 ${mil}mil（非整数点）：条宽在 ${lo}~${hi} 点之间抖动，已回解验证可读。首次换纸请实扫一张确认`,
+    'bar.fillreject': '⚠ 这个 SKU 填不满：填满所需的条宽细到 2 点以下，抖动会盖过 Code128 的解码容差，已退回整数模块宽。要真正填满得换更宽的标签纸或缩短 SKU',
     'bar.quiet': '⚠ 静区不足，建议加大左右留白',
     'bar.narrow': '⚠ 窄条只有 1 点(0.125mm)，已到打印头极限，扫码可能不稳 —— 建议减小左右留白或换更宽的标签纸',
     'preview.fail': (e) => '预览失败：' + e,
@@ -109,6 +112,7 @@ const I18N = {
     'set.rotate': 'Rotate',
     'set.module': 'Module px',
     'set.auto': 'Auto',
+    'set.fill': 'Fill',
     'set.layout': 'Layout',
     'set.margin': 'Side margin mm',
     'set.top': 'Barcode top',
@@ -145,6 +149,8 @@ const I18N = {
 
     'bar.info': (m, px, bw, mg) => `${m} modules × ${px}px = ${bw}mm wide, ${mg}mm actual margin`,
     'bar.textonly': 'Text-only mode: no barcode, font size fills the width; drag "Vertical fill" to stretch the text — 100% fills the whole label',
+    'bar.fractional': (mil, lo, hi) => `Module width ${mil}mil (non-integer dots): bars vary between ${lo} and ${hi} dots, verified decodable. Scan a real print once when changing stock`,
+    'bar.fillreject': '⚠ This SKU cannot fill the width: doing so needs bars under 2 dots, where the rounding jitter exceeds Code128 decode tolerance — fell back to an integer module width. Use wider stock or a shorter SKU to really fill it',
     'bar.quiet': '⚠ Quiet zone too small — increase the side margin',
     'bar.narrow': '⚠ Narrow bars are only 1 dot (0.125mm), the print head limit; scanning may be unreliable — reduce the side margin or use wider stock',
     'preview.fail': (e) => 'Preview failed: ' + e,

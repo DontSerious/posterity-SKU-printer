@@ -18,6 +18,14 @@ DPI = 203  # CT-428D 打印头分辨率，8 dots/mm
 # Code128 规范要求左右各至少 10 个模块的静区
 QUIET_ZONE_MODULES = 10
 
+# module_px 的特殊值：铺满可用宽度（允许小数模块宽），见 _module_width()
+FILL_WIDTH = -1
+
+# 小数模块宽的下限。边界取整会给每根条带来最多 ±1 点的宽度误差 = ±1/m 个模块，
+# 而 Code128 解码要求边距测量误差小于 ±0.5 个模块，所以 m 必须大于 2。
+# 实测（zxing-cpp 回解 203dpi 位图）：m ≤ 1.8 全线读不出，m ≥ 1.85 起稳定。取 2.0 留余量。
+MIN_FRACTIONAL_MODULE = 2.0
+
 _FONT_CANDIDATES = [
     r"C:\Windows\Fonts\consolab.ttf",  # Consolas Bold：等宽 + 粗，热敏印出来最清晰
     r"C:\Windows\Fonts\arialbd.ttf",
@@ -84,6 +92,27 @@ def _auto_module(n_modules: int, canvas_w: int, avail_w: int) -> int:
     while m > 1 and (canvas_w - n_modules * m) / 2 < QUIET_ZONE_MODULES * m:
         m -= 1
     return m
+
+
+def _module_width(n_modules: int, canvas_w: int, avail_w: int, layout: Layout) -> float:
+    """本次要用的模块宽（热敏点），可能是小数。
+
+    module_px = FILL_WIDTH 时返回 avail_w / n 的小数值，铺满可用宽度。小数模块宽
+    不是「把位图拉伸」—— 画的时候每个模块边界单独 round 到点阵上，条依旧是纯黑纯白，
+    只是每根条宽在 ⌊m⌋ 和 ⌈m⌉ 之间抖，累计位置误差恒 ≤ 0.5 点。Code128 解码测的是
+    每字符 11 模块内的相对比例，容得下这种抖动 —— 但只在模块够宽时成立，窄到
+    MIN_FRACTIONAL_MODULE 以下抖动就盖过了解码容差，这时退回整数模块宽（宁可留白）。
+    """
+    if layout.module_px == FILL_WIDTH:
+        m = avail_w / n_modules
+        if m >= MIN_FRACTIONAL_MODULE:
+            return m
+        # 填不满：填满所需的模块宽已经细到解码不出来，退回整数宽
+        return float(_auto_module(n_modules, canvas_w, avail_w))
+    m = layout.module_px if layout.module_px and layout.module_px > 0 else _auto_module(n_modules, canvas_w, avail_w)
+    if n_modules * m > avail_w:  # 手动指定过大时收回来
+        m = max(1, avail_w // n_modules)
+    return float(m)
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
@@ -162,18 +191,17 @@ def _render_content(sku: str, w: int, h: int, layout: Layout) -> Image.Image:
     margin_x = mm_to_px(layout.margin_x_mm) if layout.margin_x_mm > 0 else 0
     avail_w = max(1, w - 2 * margin_x)
 
-    module_px = layout.module_px if layout.module_px and layout.module_px > 0 else _auto_module(n, w, avail_w)
-    if n * module_px > avail_w:  # 手动指定过大时收回来
-        module_px = max(1, avail_w // n)
+    m = _module_width(n, w, avail_w, layout)
 
-    bar_w = n * module_px
+    bar_w = int(round(n * m))
     x0 = (w - bar_w) // 2
     y0 = int(round(h * layout.barcode_top_pct / 100.0))
     bar_h = max(1, int(round(h * layout.barcode_height_pct / 100.0)))
     if y0 + bar_h > h:
         bar_h = max(1, h - y0)
 
-    # 逐条画黑模块（把连续的 '1' 合并成一个矩形，减少绘制次数）
+    # 逐条画黑模块（把连续的 '1' 合并成一个矩形，减少绘制次数）。
+    # 边界各自 round 到点阵：m 为整数时和 x0 + i*m 完全等价，为小数时误差不累积。
     i = 0
     while i < n:
         if modules[i] == "1":
@@ -181,7 +209,7 @@ def _render_content(sku: str, w: int, h: int, layout: Layout) -> Image.Image:
             while j < n and modules[j] == "1":
                 j += 1
             draw.rectangle(
-                [x0 + i * module_px, y0, x0 + j * module_px - 1, y0 + bar_h - 1],
+                [x0 + int(round(i * m)), y0, x0 + int(round(j * m)) - 1, y0 + bar_h - 1],
                 fill=0,
             )
             i = j
@@ -264,12 +292,15 @@ def barcode_info(sku: str, width_mm: float, layout: Layout | dict | None = None)
     w = mm_to_px(width_mm)
     margin_x = mm_to_px(layout.margin_x_mm) if layout.margin_x_mm > 0 else 0
     avail_w = max(1, w - 2 * margin_x)
-    m = layout.module_px if layout.module_px and layout.module_px > 0 else _auto_module(n, w, avail_w)
-    if n * m > avail_w:
-        m = max(1, avail_w // n)
+    m = _module_width(n, w, avail_w, layout)
+    fractional = abs(m - round(m)) > 1e-9
     return {
+        # 选了「填满」却没填满：所需模块宽细到解码不出来，已退回整数宽
+        "fill_rejected": layout.module_px == FILL_WIDTH and not fractional,
         "modules": n,
-        "module_px": m,
+        "module_px": round(m, 2),
+        "module_mil": round(m / DPI * 1000, 2),  # 和标签软件的 density 单位对齐
+        "fractional": fractional,
         "barcode_width_mm": round(n * m / DPI * 25.4, 2),
         "avail_width_mm": round(avail_w / DPI * 25.4, 2),
         "actual_margin_mm": round((w - n * m) / 2 / DPI * 25.4, 2),
@@ -277,5 +308,5 @@ def barcode_info(sku: str, width_mm: float, layout: Layout | dict | None = None)
         "overflow": n * m > avail_w,
         "quiet_zone_ok": (w - n * m) / 2 >= QUIET_ZONE_MODULES * m,
         # 1 个模块 = 1 个热敏点 = 0.125mm，窄条已到打印头极限，部分扫码枪会读不稳
-        "narrow": m <= 1,
+        "narrow": m < 1.5,
     }

@@ -368,6 +368,8 @@ async function doPreview() {
       $('binfo').textContent = t('bar.textonly');
     } else if (info.ok) {
       let msg = t('bar.info', info.modules, info.module_px, info.barcode_width_mm, info.actual_margin_mm);
+      if (info.fractional) msg += '\n' + t('bar.fractional', info.module_mil, Math.floor(info.module_px), Math.ceil(info.module_px));
+      if (info.fill_rejected) msg += '\n' + t('bar.fillreject');
       if (!info.quiet_zone_ok) msg += '\n' + t('bar.quiet');
       if (info.narrow) msg += '\n' + t('bar.narrow');
       $('binfo').textContent = msg;
