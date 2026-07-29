@@ -45,7 +45,9 @@ const I18N = {
     'set.textfill': '文字纵向铺满',
     'set.preview': '标签预览',
     'set.go': '打印',
-    'paper.custom': '自定义尺寸（默认 60 × 30 mm）',
+    'paper.custom': '自定义尺寸',
+    'paper.quick': (w, h) => `${w} × ${h} mm`,
+    'paper.toowide': (w, max) => `⚠ 纸宽 ${w}mm 超出打印头的 ${max}mm，超出部分永远印不上（内容会挤在可打印区里）。这台机器最宽只能吃 ${max}mm 的纸，100 × 150 才是常见的大标签规格`,
     'printer.default': '（默认）',
 
     'btn.print': '确定打印',
@@ -123,7 +125,9 @@ const I18N = {
     'set.textfill': 'Vertical fill',
     'set.preview': 'Label preview',
     'set.go': 'Print',
-    'paper.custom': 'Custom size (default 60 × 30 mm)',
+    'paper.custom': 'Custom size',
+    'paper.quick': (w, h) => `${w} × ${h} mm`,
+    'paper.toowide': (w, max) => `⚠ ${w}mm stock is wider than the ${max}mm print head — anything past that can never be printed (content is squeezed into the printable area). This printer tops out at ${max}mm; 100 × 150 is the usual large-label size`,
     'printer.default': ' (default)',
 
     'btn.print': 'Confirm & print',

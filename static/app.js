@@ -78,9 +78,12 @@ function syncTextOnly() {
   $('textfill').disabled = !on;
 }
 
+// 常用尺寸快捷项。驱动预设里没有这些，都走 DMPAPER_USER 自定义尺寸
+const QUICK_SIZES = [[60, 30], [90, 50], [100, 150]];
+
 function paperSpec() {
   const sel = $('paper').value;
-  if (sel === 'custom') {
+  if (sel === 'custom' || sel.startsWith('q')) {
     return { mode: 'custom', paper_id: 256, width_mm: parseFloat($('wmm').value), height_mm: parseFloat($('hmm').value) };
   }
   const p = papers[parseInt(sel, 10)];
@@ -92,6 +95,7 @@ function paperSpec() {
 // --------------------------------------------------------------------------- //
 
 let printerList = [];
+let printerRes = {};   // 驱动报的 dpi 与可打印点数，用来判断纸宽有没有超出打印头
 
 function renderPrinterOptions() {
   const sel = $('printer');
@@ -150,6 +154,12 @@ function renderPaperOptions() {
   custom.value = 'custom';
   custom.textContent = t('paper.custom');
   sel.appendChild(custom);
+  QUICK_SIZES.forEach(([w, h], i) => {
+    const o = document.createElement('option');
+    o.value = 'q' + i;
+    o.textContent = t('paper.quick', w, h);
+    sel.appendChild(o);
+  });
   papers.forEach((p, i) => {
     const o = document.createElement('option');
     o.value = String(i);
@@ -162,24 +172,34 @@ function renderPaperOptions() {
 async function loadPapers(printer, cfg) {
   const r = await (await fetch('/api/papers?printer=' + encodeURIComponent(printer))).json();
   papers = r.papers || [];
+  printerRes = r.resolution || {};
   const sel = $('paper');
   renderPaperOptions();
-  // 驱动预设里没有 60×30，默认就停在自定义
+  // 驱动预设里没有 60×30 这类尺寸，默认落在自定义/快捷项上
   const wantPreset = cfg && cfg.paper && cfg.paper.mode === 'preset';
   if (wantPreset) {
     const idx = papers.findIndex((p) => p.id === cfg.paper.paper_id);
     sel.value = idx >= 0 ? String(idx) : 'custom';
   } else {
-    sel.value = 'custom';
+    // 上次存的自定义尺寸正好等于某个快捷项时，直接选中它
+    const P = (cfg && cfg.paper) || {};
+    const qi = QUICK_SIZES.findIndex(([w, h]) => w === P.width_mm && h === P.height_mm);
+    sel.value = qi >= 0 ? 'q' + qi : 'custom';
   }
   onPaperChange();
 }
 
 function onPaperChange() {
-  const isCustom = $('paper').value === 'custom';
-  $('customSize').classList.toggle('hidden', !isCustom);
-  if (!isCustom) {
-    const p = papers[parseInt($('paper').value, 10)];
+  const v = $('paper').value;
+  const quick = v.startsWith('q');
+  // 快捷项也是自定义尺寸，宽高框留着可见 —— 选完还能接着微调
+  $('customSize').classList.toggle('hidden', !(v === 'custom' || quick));
+  if (quick) {
+    const [w, h] = QUICK_SIZES[parseInt(v.slice(1), 10)];
+    $('wmm').value = w;
+    $('hmm').value = h;
+  } else if (v !== 'custom') {
+    const p = papers[parseInt(v, 10)];
     $('wmm').value = p.width_mm;
     $('hmm').value = p.height_mm;
   }
@@ -353,6 +373,15 @@ function refreshPreview() {
   previewTimer = setTimeout(doPreview, 180);
 }
 
+// 打印头的物理宽度。纸比它宽的部分永远印不上，跟版式参数无关
+function overWideWarning() {
+  const dpi = printerRes.dpi_x, dots = printerRes.horz_res;
+  if (!dpi || !dots) return '';
+  const maxMm = dots / dpi * 25.4;
+  const w = paperSpec().width_mm;
+  return w > maxMm + 0.5 ? t('paper.toowide', w, Math.round(maxMm * 10) / 10) : '';
+}
+
 async function doPreview() {
   const r = rows[activeIndex];
   const sku = (r && r.sku ? r.sku : 'EU-PRO-01').trim();
@@ -363,11 +392,13 @@ async function doPreview() {
     const res = await fetch('/api/preview', opts);
     if (!res.ok) { $('binfo').textContent = t('preview.fail', (await res.json()).error); return; }
     $('preview').src = URL.createObjectURL(await res.blob());
+    const wide = overWideWarning();
     const info = await (await fetch('/api/barcode-info', opts)).json();
     if (info.ok && info.text_only) {
-      $('binfo').textContent = t('bar.textonly');
+      $('binfo').textContent = [wide, t('bar.textonly')].filter(Boolean).join('\n');
     } else if (info.ok) {
       let msg = t('bar.info', info.modules, info.module_px, info.barcode_width_mm, info.actual_margin_mm);
+      if (wide) msg = wide + '\n' + msg;
       if (info.fractional) msg += '\n' + t('bar.fractional', info.module_mil, Math.floor(info.module_px), Math.ceil(info.module_px));
       if (info.fill_rejected) msg += '\n' + t('bar.fillreject');
       if (!info.quiet_zone_ok) msg += '\n' + t('bar.quiet');
