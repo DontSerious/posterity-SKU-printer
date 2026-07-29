@@ -112,10 +112,12 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 
 ```jsonc
 "ocr": {
-  "sku_regex": "^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,3}$",  // SKU 长什么样
+  "sku_regex": "^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,6}$",  // SKU 长什么样
   "min_score": 0.85                                      // 低于此分数的行标黄
 }
 ```
+
+默认认 2~7 段、段间 `-` 的写法，覆盖 `EU-PRO-01`、`PHC-MIN-MP-WLB`、`SS-GLA-AUR-GLA-WLB-WH`、`A3-SS-DW-AUR-GLA-WLB` 这几类。
 
 ## 常见问题
 

@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 import threading
 
-DEFAULT_SKU_REGEX = r"^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,3}$"
+# 2~7 段，段间用 '-'：EU-PRO-01 / PHC-MIN-MP-WLB / SS-GLA-AUR-GLA-WLB-WH
+DEFAULT_SKU_REGEX = r"^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,6}$"
 DEFAULT_MIN_SCORE = 0.85
 
 _engine = None
