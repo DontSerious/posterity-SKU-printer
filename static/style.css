@@ -53,6 +53,7 @@ code {
   font-family: Consolas, monospace; font-size: 11px;
 }
 .kbdhint { opacity: .6; font-weight: 400; font-size: 11px; }
+.rawmode { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: #5b646f; }
 
 /* ---------- 上传 / 截图 ---------- */
 .drop {

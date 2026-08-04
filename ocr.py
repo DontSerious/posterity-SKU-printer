@@ -326,7 +326,43 @@ def _read_qty(token: str) -> int | None:
     return None
 
 
-def parse_text(text: str, sku_regex: str = DEFAULT_SKU_REGEX) -> dict:
+def _parse_text_raw(text: str) -> dict:
+    """原文模式：整行就是要打印的内容，一个字符都不动。
+
+    不拆词、不套正则、不做归一化 —— 逗号、空格、小写、中文都原样保留（`SC,ABC`
+    在默认模式下会被逗号切成两栏，再被归一化吃掉逗号变成 `SCABC`）。
+    只在行尾切掉带显式标记的数量（`X3` / `(3)`）；裸数字保留为正文的一部分，
+    否则 `ABC 3` 这种本身带数字的内容会被误切。
+    """
+    rows = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        qty, qty_detected = 1, False
+        parts = line.rsplit(None, 1)  # 按最后一段空白切开
+        if len(parts) == 2:
+            val = None
+            if _QTY_MARKED_RE.match(parts[1]) or _QTY_PAREN_RE.match(parts[1]):
+                val = _read_qty(parts[1])
+            if val is not None and val > 0 and parts[0].strip():
+                line, qty, qty_detected = parts[0].strip(), val, True
+        rows.append(
+            {
+                "sku": line,
+                "sku_raw": raw.strip(),
+                "qty": qty,
+                "qty_detected": qty_detected,
+                "description": "",
+                "confidence": 1.0,
+                "low_confidence": False,
+                "selected": True,
+            }
+        )
+    return {"rows": rows, "unparsed": []}
+
+
+def parse_text(text: str, sku_regex: str = DEFAULT_SKU_REGEX, raw: bool = False) -> dict:
     """逐行解析粘贴进来的清单，例如：
 
         PHC-MIN-MP-WLB X3
@@ -334,7 +370,12 @@ def parse_text(text: str, sku_regex: str = DEFAULT_SKU_REGEX) -> dict:
         PHC-ELE-BK X1
 
     也兼容从 Excel 复制的「描述<TAB>SKU<TAB>数量」以及 "3x SKU"、"SKU (2)" 等写法。
+
+    raw=True 时整行原样当 SKU，见 _parse_text_raw()。
     """
+    if raw:
+        return _parse_text_raw(text)
+
     pattern = re.compile(sku_regex)
     rows: list[dict] = []
     unparsed: list[str] = []

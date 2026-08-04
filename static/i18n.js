@@ -16,6 +16,7 @@ const I18N = {
     'txt.placeholder': '每行一个 SKU，例如：\n\nPHC-MIN-MP-WLB X3\nPHC-GCL-DW-WLB X2\nPHC-CLA-DW-WLB X2\nPHC-ELE-BK X1',
     'txt.hint': '数量支持 <code>X3</code> / <code>x3</code> / <code>3</code> / <code>(3)</code> 等写法；也可以直接从 Excel 复制整行（描述 + SKU + 数量）。不写数量默认按 1 张。',
     'txt.parse': '解析文本',
+    'txt.raw': '按原文（整行原样打印，不拆分、不校验）',
     'txt.empty': '文本框是空的',
 
     'list.title': '核对列表',
@@ -96,6 +97,7 @@ const I18N = {
     'txt.placeholder': 'One SKU per line, e.g.\n\nPHC-MIN-MP-WLB X3\nPHC-GCL-DW-WLB X2\nPHC-CLA-DW-WLB X2\nPHC-ELE-BK X1',
     'txt.hint': 'Quantity accepts <code>X3</code> / <code>x3</code> / <code>3</code> / <code>(3)</code> and similar. You can also paste whole rows copied from Excel (description + SKU + quantity). Missing quantity defaults to 1.',
     'txt.parse': 'Parse text',
+    'txt.raw': 'Verbatim (print each line exactly as typed, no splitting or validation)',
     'txt.empty': 'The text box is empty',
 
     'list.title': 'Review list',

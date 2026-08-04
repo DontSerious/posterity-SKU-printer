@@ -173,7 +173,11 @@ def api_parse_text():
 
     ocr_cfg = load_config().get("ocr", {})
     try:
-        result = ocr_mod.parse_text(text, sku_regex=ocr_cfg.get("sku_regex", ocr_mod.DEFAULT_SKU_REGEX))
+        result = ocr_mod.parse_text(
+            text,
+            sku_regex=ocr_cfg.get("sku_regex", ocr_mod.DEFAULT_SKU_REGEX),
+            raw=bool(payload.get("raw")),
+        )
     except re.error as exc:
         return jsonify({"ok": False, "error": f"config.json 里的 sku_regex 有问题: {exc}"}), 400
     return jsonify({"ok": True, **result})

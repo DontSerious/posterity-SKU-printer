@@ -271,17 +271,19 @@ async function parseText() {
     const res = await fetch('/api/parse-text', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, raw: $('rawmode').checked }),
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Parse failed');
+    // 原文模式下不写数量是常态，别整片标黄
+    const raw = $('rawmode').checked;
     rows = (data.rows || []).map((r) => ({
       selected: true,
       description: r.description || '',
       sku: r.sku,
       qty: r.qty,
       low_confidence: false,
-      qty_detected: r.qty_detected,
+      qty_detected: raw ? true : r.qty_detected,
     }));
     activeIndex = 0;
     renderTable();
