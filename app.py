@@ -353,10 +353,14 @@ if __name__ == "__main__":
         app.jinja_env.auto_reload = True
         app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
         # 显式列出本项目的 .py：printing/label/ocr 是延迟导入的，
-        # 首次请求之前不在 sys.modules 里，reloader 看不到它们
+        # 首次请求之前不在 sys.modules 里，reloader 看不到它们。
+        # config.json 绝不能列进来：/api/print 是先存配置再出纸，一监视它
+        # reloader 就会在 StartDoc/EndDoc 中间把进程杀掉，spooler 只收到一个
+        # 0 字节的残废作业（事件 372 / Win32 259），纸不出。配置本来也是每个
+        # 请求现读现用的，重启没有任何意义。
         extra_files = [
             os.path.join(BASE_DIR, f)
-            for f in ("app.py", "ocr.py", "label.py", "printing.py", "config.json")
+            for f in ("app.py", "ocr.py", "label.py", "printing.py")
         ]
 
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):
