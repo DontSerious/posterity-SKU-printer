@@ -292,6 +292,20 @@ def _open_browser():
         pass
 
 
+def _preheat():
+    """后台把 printing 先导进来，别让第一个请求扛这个开销。
+
+    /api/printers 里的 `import printing` 会连带加载 PIL 的 ImageWin 和四个 pywin32
+    扩展模块，首次是冷的（.pyd 要读盘、还要被杀软扫一遍），实测 1 秒起步，开机后
+    第一次能到 6 秒。放在请求路径上就是「页面画出来了但点什么都没反应」。
+    挪到启动阶段，等用户打开浏览器时早就热好了。
+    """
+    try:
+        import printing  # noqa: F401
+    except Exception:  # noqa: BLE001
+        pass  # 预热失败无所谓：真用到时会再 import 一次，那次的报错才需要暴露
+
+
 def _arg_value(flag: str) -> str | None:
     """取 `--flag value` 或 `--flag=value` 的值。"""
     for i, a in enumerate(sys.argv):
@@ -365,6 +379,11 @@ if __name__ == "__main__":
 
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):
         threading.Timer(1.2, _open_browser).start()
+
+    # 开了 reloader 时父进程只负责盯文件，真正收请求的是 WERKZEUG_RUN_MAIN 那个子进程，
+    # 预热要在它里面做
+    if os.environ.get("WERKZEUG_RUN_MAIN") or not reload_on:
+        threading.Thread(target=_preheat, daemon=True).start()
 
     print(f"\n  SKU 条码打印  ->  {URL}   （浏览器没自动弹出就手动复制这个地址）")
     if lan:

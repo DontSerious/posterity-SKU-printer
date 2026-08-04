@@ -112,19 +112,26 @@ function renderPrinterOptions() {
 }
 
 async function init() {
-  const cfg = await (await fetch('/api/config')).json();
+  // 先让界面能用，再去拿数据。/api/printers 冷启动时服务端要现场 import
+  // pywin32 和 PIL，要等一会儿；把 bind() 排在它后面，这段时间里页面看着
+  // 正常其实点什么都没反应。
+  bind();
+  applyI18n();
+  refreshSummary();
+
+  // 这两个请求互不依赖，并发发省一个来回
+  const [cfg, info] = await Promise.all([
+    fetch('/api/config').then((r) => r.json()),
+    fetch('/api/printers').then((r) => r.json()),
+  ]);
   applyConfig(cfg);
 
-  const info = await (await fetch('/api/printers')).json();
   printerList = info.printers || [];
   renderPrinterOptions();
   const sel = $('printer');
   sel.value = cfg.printer && printerList.some((p) => p.name === cfg.printer) ? cfg.printer : info.selected;
   await loadPapers(sel.value, cfg);
 
-  bind();
-  applyI18n();
-  refreshSummary();
   refreshPreview();
 }
 
