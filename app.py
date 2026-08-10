@@ -1,7 +1,8 @@
 """SKU 条码识别打印工具 —— 本地 Web 服务。
 
 流程：上传/粘贴截图 → 自动 OCR → 表格核对 → 点「确定打印」才出纸。
-/api/ocr 只识别不打印；只有 /api/print 会真正驱动打印机。
+/api/ocr 只识别不打印；会真正驱动打印机的只有 /api/print 和 /api/print-file
+（后者打印上传的 PDF/图片，比如 ERP 导出的二维码标签 PDF）。
 """
 
 from __future__ import annotations
@@ -32,6 +33,10 @@ DEFAULT_CONFIG = {
     "paper": {"mode": "custom", "paper_id": 256, "width_mm": 60.0, "height_mm": 30.0},
     "layout": label_mod.Layout().to_dict(),
     "ocr": {"sku_regex": ocr_mod.DEFAULT_SKU_REGEX, "min_score": ocr_mod.DEFAULT_MIN_SCORE},
+    # ERP 打印桥（erp_bridge.py）：出站轮询 ERP 的打印队列。token 在 ERP 的
+    # 运营设置里（print_bridge_token）。enabled=false 时线程空转不发请求。
+    "erp": {"enabled": False, "url": "https://erp.posterityindustries.com",
+            "token": "", "name": "office", "poll_seconds": 3},
 }
 
 
@@ -212,6 +217,105 @@ def api_barcode_info():
 
 
 # --------------------------------------------------------------------------- #
+# 打印文件（PDF / 图片）—— 比如 ERP 导出的二维码标签 PDF
+# --------------------------------------------------------------------------- #
+
+_MAX_FILE_PAGES = 600
+
+
+def _pages_from_upload(data: bytes, filename: str, dpi: int = 300):
+    """PDF → 每页一张 PIL 图，纸张尺寸从 PDF 页面读出（pt → mm）；
+    普通图片 → 单页，尺寸返回 None（由调用方按当前纸张设置定）。"""
+    name = (filename or "").lower()
+    if name.endswith(".pdf") or data[:5] == b"%PDF-":
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(data)
+        try:
+            if len(pdf) > _MAX_FILE_PAGES:
+                raise ValueError(f"文件有 {len(pdf)} 页，超过上限 {_MAX_FILE_PAGES}，请分批")
+            w_pt, h_pt = pdf[0].get_size()
+            pages = [p.render(scale=dpi / 72).to_pil().convert("RGB") for p in pdf]
+        finally:
+            pdf.close()
+        return pages, round(w_pt / 72 * 25.4, 1), round(h_pt / 72 * 25.4, 1)
+
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(data))
+    img.load()
+    return [img.convert("RGB")], None, None
+
+
+@app.post("/api/file-info")
+def api_file_info():
+    """只读：页数 + 从 PDF 读出的纸张尺寸 + 第一页缩略图。不打印。"""
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "没有收到文件"}), 400
+    try:
+        pages, w_mm, h_mm = _pages_from_upload(f.read(), f.filename, dpi=120)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"读取文件失败: {exc}"}), 400
+    thumb = pages[0].copy()
+    thumb.thumbnail((520, 520))
+    buf = io.BytesIO()
+    thumb.save(buf, "PNG")
+    return jsonify({
+        "ok": True,
+        "pages": len(pages),
+        "width_mm": w_mm,
+        "height_mm": h_mm,
+        "preview": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+    })
+
+
+@app.post("/api/print-file")
+def api_print_file():
+    """打印上传的 PDF/图片。PDF 的纸张尺寸取自文件本身（ERP 的标签 PDF
+    每页就是一张标签的物理尺寸）；图片则用表单里带来的纸张设置。"""
+    import printing
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "没有收到文件"}), 400
+    copies = max(1, int(request.form.get("copies", 1) or 1))
+    dry_run = request.form.get("dry_run") == "1"
+
+    try:
+        pages, w_mm, h_mm = _pages_from_upload(f.read(), f.filename, dpi=300)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"读取文件失败: {exc}"}), 400
+
+    if w_mm:
+        paper = printing.PaperSpec(width_mm=w_mm, height_mm=h_mm)
+    else:
+        try:
+            paper = _paper_from({"paper": json.loads(request.form.get("paper") or "{}")})
+        except (ValueError, TypeError):
+            paper = _paper_from({})
+
+    try:
+        if dry_run:
+            res = printing.dry_run_images(
+                pages, copies, os.path.join(BASE_DIR, "output"),
+                stem=os.path.splitext(os.path.basename(f.filename or "file"))[0],
+            )
+        else:
+            printer = request.form.get("printer") or ""
+            if not printer:
+                return jsonify({"ok": False, "error": "没有选择打印机"}), 400
+            res = printing.print_images(printer, pages, paper, copies,
+                                        job_name=f.filename or "Label file")
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"打印失败: {exc}"}), 500
+
+    res["pages"] = len(pages)
+    res["paper"] = {"width_mm": paper.width_mm, "height_mm": paper.height_mm}
+    return jsonify(res)
+
+
+# --------------------------------------------------------------------------- #
 # 打印（唯一会出纸的接口）
 # --------------------------------------------------------------------------- #
 
@@ -381,9 +485,12 @@ if __name__ == "__main__":
         threading.Timer(1.2, _open_browser).start()
 
     # 开了 reloader 时父进程只负责盯文件，真正收请求的是 WERKZEUG_RUN_MAIN 那个子进程，
-    # 预热要在它里面做
+    # 预热和 ERP 打印桥都要在它里面启动
     if os.environ.get("WERKZEUG_RUN_MAIN") or not reload_on:
         threading.Thread(target=_preheat, daemon=True).start()
+        # ERP 打印桥（出站轮询，config.json → erp.enabled 打开）
+        import erp_bridge
+        erp_bridge.start(load_config)
 
     print(f"\n  SKU 条码打印  ->  {URL}   （浏览器没自动弹出就手动复制这个地址）")
     if lan:
