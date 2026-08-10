@@ -192,6 +192,65 @@ def print_labels(
     }
 
 
+def print_images(
+    printer: str,
+    images: list,
+    paper: PaperSpec,
+    copies: int = 1,
+    job_name: str = "Label file",
+) -> dict:
+    """打印现成的图片（PDF 每页一张 / 上传的 PNG），缩放铺满整页。
+
+    与 print_labels 的区别：不渲染条码，图片是外部生成的（比如 ERP 导出的
+    二维码标签 PDF）。页面方向与纸张不一致时自动旋转 90°，所以横版 PDF
+    打竖装的纸也不会被压扁。
+    """
+    if not images:
+        return {"ok": False, "error": "没有可打印的页面", "printed": 0}
+
+    dc = _make_dc(printer, paper)
+    try:
+        w_px = dc.GetDeviceCaps(win32con.HORZRES)
+        h_px = dc.GetDeviceCaps(win32con.VERTRES)
+
+        dc.StartDoc(job_name)
+        printed = 0
+        try:
+            for img in images:
+                if (img.width >= img.height) != (w_px >= h_px):
+                    img = img.rotate(90, expand=True)
+                dib = ImageWin.Dib(img.convert("RGB"))
+                for _ in range(max(1, int(copies))):
+                    dc.StartPage()
+                    dib.draw(dc.GetHandleOutput(), (0, 0, w_px, h_px))
+                    dc.EndPage()
+                    printed += 1
+        finally:
+            dc.EndDoc()
+    finally:
+        dc.DeleteDC()
+
+    return {"ok": True, "printed": printed, "canvas_px": [w_px, h_px]}
+
+
+def dry_run_images(
+    images: list,
+    copies: int = 1,
+    out_dir: str = "output",
+    stem: str = "file",
+) -> dict:
+    """干跑：把每页存成 PNG，不出纸。"""
+    os.makedirs(out_dir, exist_ok=True)
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem) or "file"
+    files = []
+    for i, img in enumerate(images, 1):
+        path = os.path.join(out_dir, f"{safe}_p{i}.png")
+        img.convert("L").save(path)
+        files.append(os.path.abspath(path))
+    return {"ok": True, "printed": 0, "dry_run": True,
+            "total_labels": len(images) * max(1, int(copies)), "files": files}
+
+
 def dry_run_labels(
     rows: list[dict],
     paper: PaperSpec,

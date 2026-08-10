@@ -264,6 +264,80 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((el) => el.classList.toggle('on', el.dataset.tab === name));
   $('paneImg').classList.toggle('hidden', name !== 'img');
   $('paneTxt').classList.toggle('hidden', name !== 'txt');
+  $('paneFile').classList.toggle('hidden', name !== 'file');
+}
+
+// --------------------------------------------------------------------------- //
+// 打印文件（PDF / 图片）—— 比如 ERP 导出的二维码标签 PDF
+// --------------------------------------------------------------------------- //
+
+let pickedFile = null;   // File 对象；打印时原样再传给 /api/print-file
+let pickedInfo = null;   // {pages, width_mm, height_mm}
+
+async function handleDocFile(f) {
+  if (!f) return;
+  pickedFile = f;
+  pickedInfo = null;
+  const el = $('fileInfo');
+  el.textContent = t('file.reading');
+  $('dropFile').classList.add('hidden');
+  $('fileReady').classList.remove('hidden');
+  $('fileResult').textContent = '';
+
+  const fd = new FormData();
+  fd.append('file', f, f.name);
+  try {
+    const res = await fetch('/api/file-info', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    pickedInfo = data;
+    $('filePreview').src = data.preview;
+    el.textContent = data.width_mm
+      ? t('file.info', f.name, data.pages, data.width_mm, data.height_mm)
+      : t('file.infoimg', f.name);
+  } catch (e) {
+    el.textContent = String(e.message || e);
+    pickedFile = null;
+  }
+}
+
+async function submitFilePrint(dryRun) {
+  if (!pickedFile) return;
+  const copies = Math.max(1, parseInt($('fileCopies').value || '1', 10));
+  const pages = pickedInfo ? pickedInfo.pages : 1;
+  const p = paperSpec();
+  const wmm = (pickedInfo && pickedInfo.width_mm) ? pickedInfo.width_mm : p.width_mm;
+  const hmm = (pickedInfo && pickedInfo.height_mm) ? pickedInfo.height_mm : p.height_mm;
+  if (!dryRun &&
+      !confirm(t('file.confirm', pickedFile.name, pages, copies, pages * copies,
+                 $('printer').value, wmm, hmm))) return;
+
+  const btn = dryRun ? $('fileDry') : $('filePrint');
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t(dryRun ? 'btn.drying' : 'btn.printing');
+  const el = $('fileResult');
+  const fd = new FormData();
+  fd.append('file', pickedFile, pickedFile.name);
+  fd.append('printer', $('printer').value);
+  fd.append('copies', String(copies));
+  fd.append('dry_run', dryRun ? '1' : '0');
+  fd.append('paper', JSON.stringify(p));   // 只对图片生效；PDF 尺寸取自文件
+  try {
+    const res = await fetch('/api/print-file', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    el.className = 'result ok';
+    el.textContent = dryRun
+      ? t('dry.done', data.files.length, data.total_labels, data.files.join('\n'))
+      : t('print.done', data.printed, $('printer').value);
+  } catch (e) {
+    el.className = 'result err';
+    el.textContent = String(e.message || e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
 }
 
 // --------------------------------------------------------------------------- //
@@ -470,6 +544,23 @@ function bind() {
 
   $('print').addEventListener('click', () => submitPrint(false));
   $('dry').addEventListener('click', () => submitPrint(true));
+
+  // 打印文件页签
+  const dropF = $('dropFile');
+  dropF.addEventListener('click', () => $('fileDoc').click());
+  $('fileDoc').addEventListener('change', (e) => { if (e.target.files[0]) handleDocFile(e.target.files[0]); });
+  ['dragenter', 'dragover'].forEach((ev) =>
+    dropF.addEventListener(ev, (e) => { e.preventDefault(); dropF.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropF.addEventListener(ev, (e) => { e.preventDefault(); dropF.classList.remove('over'); }));
+  dropF.addEventListener('drop', (e) => { if (e.dataTransfer.files[0]) handleDocFile(e.dataTransfer.files[0]); });
+  $('fileReupload').addEventListener('click', () => {
+    pickedFile = null; pickedInfo = null;
+    $('fileReady').classList.add('hidden');
+    $('dropFile').classList.remove('hidden');
+  });
+  $('filePrint').addEventListener('click', () => submitFilePrint(false));
+  $('fileDry').addEventListener('click', () => submitFilePrint(true));
 }
 
 init();

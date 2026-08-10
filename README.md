@@ -23,6 +23,38 @@
 
 > 只有「确定打印」会驱动打印机。想先看效果就点 **「干跑」**，标签会存成 PNG 到 `output/`，不费标签纸。
 
+## 打印文件（ERP 二维码标签 PDF）
+
+第三个页签 **「打印文件」**：把 PDF（或 PNG）拖进去 → 显示页数、尺寸和第一页预览 →
+选份数 → 「确定打印」。
+
+- **PDF 的纸张尺寸自动取自页面本身**（ERP 的标签 PDF 每页就是一张标签的物理
+  尺寸，例如 90 × 50 mm），不用手动调右下角的纸张设置；图片则按当前纸张设置打。
+- 页面方向与纸张不一致时**自动旋转 90°**，横版标签打竖装的纸不会被压扁。
+- 一样支持「干跑」先出 PNG 核对。上限 600 页/次。
+- 依赖 `pypdfium2`（已加进 `pyproject.toml`，下次 `run.bat` 启动时 `uv sync`
+  会自动装上）。
+
+## 从 ERP 直接打印（打印桥）
+
+ERP 的标签页（Items → 🏷️ Labels）可以直接把标签发到这台打印机，**不用打开
+本工具的网页**。原理：本服务每 3 秒出站轮询一次 ERP 的打印队列（不开任何
+入站端口），顺便上报本机打印机列表 —— ERP 页面上的打印机下拉框就是这么来的。
+
+开启方法（一次性）：
+
+1. 在 ERP 的运营设置里找到 `print_bridge_token`，复制它的值。
+2. 编辑本目录的 `config.json`，把 `erp` 块改成：
+   ```json
+   "erp": { "enabled": true, "url": "https://erp.posterityindustries.com",
+            "token": "<粘贴 token>", "name": "office", "poll_seconds": 3 }
+   ```
+3. 重启服务（`run.bat` / `run-lan.bat`，或 `Restart-ScheduledTask -TaskName "SKU Barcode Printer"`）。
+
+之后 ERP 标签页出现「🖨️ Print now」按钮（代理 60 秒内有心跳才显示）。
+打印失败会回报到 ERP 页面上；本地日志看控制台或 `logs/service.log` 里的
+`[erp-bridge]` 行。
+
 ## 共享给局域网其他主机
 
 双击 **`run-lan.bat`**（而不是 `run.bat`），服务会监听 `0.0.0.0`，控制台里会列出别人该访问的地址，例如 `http://192.168.5.10:5000`。

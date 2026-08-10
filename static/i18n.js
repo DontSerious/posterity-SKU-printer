@@ -7,6 +7,16 @@ const I18N = {
 
     'tab.img': '上传截图',
     'tab.txt': '粘贴文本',
+    'tab.file': '打印文件',
+
+    'file.big': '把标签 PDF / 图片拖到这里',
+    'file.hint': '比如 ERP 导出的二维码标签 PDF —— 纸张尺寸自动取自 PDF 页面，每页出一张标签。方向不对会自动旋转。',
+    'file.copies': '每页份数',
+    'file.reading': '读取中…',
+    'file.info': (name, n, w, h) => `${name} —— ${n} 页 · ${w} × ${h} mm（取自 PDF）`,
+    'file.infoimg': (name) => `${name} —— 图片 1 页，按右下角当前纸张尺寸打印`,
+    'file.confirm': (name, pages, copies, total, printer, w, h) =>
+      `即将打印文件：\n\n${name}\n${pages} 页 × ${copies} 份 = ${total} 张\n打印机：${printer}\n纸张：${w} × ${h} mm\n\n确定开始打印？`,
 
     'drop.big': '把订单表格截图拖到这里',
     'drop.hint': '或 <b>点击选择文件</b>，或直接按 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴截图',
@@ -79,6 +89,16 @@ const I18N = {
 
     'tab.img': 'Screenshot',
     'tab.txt': 'Paste text',
+    'tab.file': 'Print a file',
+
+    'file.big': 'Drop a label PDF / image here',
+    'file.hint': 'e.g. the QR-label PDF exported from the ERP — paper size is taken from the PDF page itself, one label per page. Wrong orientation is auto-rotated.',
+    'file.copies': 'Copies per page',
+    'file.reading': 'Reading…',
+    'file.info': (name, n, w, h) => `${name} — ${n} pages · ${w} × ${h} mm (from the PDF)`,
+    'file.infoimg': (name) => `${name} — single image, printed at the current paper size (bottom right)`,
+    'file.confirm': (name, pages, copies, total, printer, w, h) =>
+      `About to print a file:\n\n${name}\n${pages} pages × ${copies} copies = ${total} labels\nPrinter: ${printer}\nStock: ${w} × ${h} mm\n\nStart printing?`,
 
     'drop.big': 'Drop the order table screenshot here',
     'drop.hint': 'or <b>click to pick a file</b>, or just press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste',

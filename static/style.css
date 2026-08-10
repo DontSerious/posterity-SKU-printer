@@ -163,4 +163,10 @@ td button.del { background: none; border: none; color: #b34141; cursor: pointer;
 .result.ok { color: #1c6b39; }
 .result.err { color: #a02020; }
 
+/* 打印文件页签 */
+.filego { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.filego label.inline { display: flex; gap: 6px; align-items: center; margin: 0; }
+.filego input[type="number"] { width: 70px; }
+#filePreview { cursor: default; }
+
 .hidden { display: none !important; }

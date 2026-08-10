@@ -11,6 +11,7 @@ dependencies = [
     "python-barcode>=0.16.1",
     "pywin32>=312 ; sys_platform == 'win32'",
     "numpy>=2.5.1",
+    "pypdfium2>=4.30.0",
 ]
 
 [tool.uv]

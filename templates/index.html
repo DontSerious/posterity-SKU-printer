@@ -19,6 +19,7 @@
       <div class="tabs">
         <button class="tab on" data-tab="img" data-i18n="tab.img">上传截图</button>
         <button class="tab" data-tab="txt" data-i18n="tab.txt">粘贴文本</button>
+        <button class="tab" data-tab="file" data-i18n="tab.file">打印文件</button>
       </div>
 
       <div id="paneImg">
@@ -45,6 +46,28 @@
         <button id="parseText" class="secondary narrow">
           <span data-i18n="txt.parse">解析文本</span> <span class="kbdhint">Ctrl+Enter</span>
         </button>
+      </div>
+
+      <div id="paneFile" class="hidden">
+        <div id="dropFile" class="drop">
+          <input type="file" id="fileDoc" accept=".pdf,image/*" hidden>
+          <p class="big" data-i18n="file.big">把标签 PDF / 图片拖到这里</p>
+          <p class="hint" data-i18n-html="file.hint">比如 ERP 导出的二维码标签 PDF —— 纸张尺寸自动取自 PDF 页面，每页出一张标签</p>
+        </div>
+        <div id="fileReady" class="hidden">
+          <div class="shotbar">
+            <span class="hint" id="fileInfo"></span>
+            <button id="fileReupload" class="link" data-i18n="shot.reupload">重新上传</button>
+          </div>
+          <div class="shotbox"><img id="filePreview" alt="file preview"></div>
+          <div class="filego">
+            <label class="inline"><span data-i18n="file.copies">每页份数</span>
+              <input type="number" id="fileCopies" min="1" max="50" value="1"></label>
+            <button id="filePrint" class="primary" data-i18n="btn.print">确定打印</button>
+            <button id="fileDry" class="secondary" data-i18n="btn.dry">干跑（只存 PNG，不出纸）</button>
+          </div>
+          <p id="fileResult" class="result"></p>
+        </div>
       </div>
     </section>
 
