@@ -20,6 +20,7 @@ from flask import Flask, jsonify, request, send_file, render_template
 import io
 
 import label as label_mod
+import learned
 import ocr as ocr_mod
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -161,6 +162,9 @@ def api_ocr():
             img,
             sku_regex=ocr_cfg.get("sku_regex", ocr_mod.DEFAULT_SKU_REGEX),
             min_score=float(ocr_cfg.get("min_score", ocr_mod.DEFAULT_MIN_SCORE)),
+            # 学到的纠错只作用在图片路径上。粘贴文本是人敲的，没有形近错，
+            # 拿字典去动它就是重蹈 3aac5c5 的覆辙（80-SS-BK → BO-SS-BK）。
+            lookup=learned,
         )
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": f"OCR 失败: {exc}"}), 500
@@ -356,7 +360,46 @@ def api_print():
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": f"打印失败: {exc}"}), 500
 
+    # 真打出来的才算数（干跑不算）。这是最强的确认信号 —— 人手里拿到标签了。
+    # 弱信号要攒够 learned.THRESHOLD 次才当模糊匹配的目标，见 learned.record_sku。
+    if res.get("ok") and not dry_run:
+        for r in rows:
+            learned.record_sku(r["sku"])
+
     return jsonify(res)
+
+
+# --------------------------------------------------------------------------- #
+# 学到的纠错
+# --------------------------------------------------------------------------- #
+
+@app.post("/api/learn")
+def api_learn():
+    """前端上报人工修正。kind ∈ fix / sku / junk。"""
+    payload = request.get_json(silent=True) or {}
+    kind = payload.get("kind")
+    try:
+        if kind == "fix":
+            learned.record_fix(payload.get("wrong") or "", payload.get("right") or "")
+        elif kind == "sku":
+            learned.record_sku(payload.get("sku") or "", strong=True)
+        elif kind == "junk":
+            learned.record_junk(payload.get("text") or "")
+        else:
+            return jsonify({"ok": False, "error": f"未知的 kind: {kind!r}"}), 400
+    except OSError as exc:
+        return jsonify({"ok": False, "error": f"写 learned.json 失败: {exc}"}), 500
+    return jsonify({"ok": True})
+
+
+@app.route("/api/learned", methods=["GET", "DELETE"])
+def api_learned():
+    """管理面板：GET 看三张表，DELETE 删一条。"""
+    if request.method == "DELETE":
+        payload = request.get_json(silent=True) or {}
+        ok = learned.forget(payload.get("kind") or "", payload.get("key") or "")
+        return jsonify({"ok": ok, **learned.snapshot()})
+    return jsonify({"ok": True, **learned.snapshot()})
 
 
 PORT = 5000
@@ -472,13 +515,13 @@ if __name__ == "__main__":
         app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
         # 显式列出本项目的 .py：printing/label/ocr 是延迟导入的，
         # 首次请求之前不在 sys.modules 里，reloader 看不到它们。
-        # config.json 绝不能列进来：/api/print 是先存配置再出纸，一监视它
-        # reloader 就会在 StartDoc/EndDoc 中间把进程杀掉，spooler 只收到一个
-        # 0 字节的残废作业（事件 372 / Win32 259），纸不出。配置本来也是每个
-        # 请求现读现用的，重启没有任何意义。
+        # config.json 和 learned.json 绝不能列进来：/api/print 是先存配置、
+        # 打完再记学习结果，一监视这两个文件 reloader 就会在 StartDoc/EndDoc
+        # 中间把进程杀掉，spooler 只收到一个 0 字节的残废作业（事件 372 /
+        # Win32 259），纸不出。它们本来也是每次现读现用的，重启没有意义。
         extra_files = [
             os.path.join(BASE_DIR, f)
-            for f in ("app.py", "ocr.py", "label.py", "printing.py")
+            for f in ("app.py", "ocr.py", "label.py", "printing.py", "learned.py")
         ]
 
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):

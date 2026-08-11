@@ -100,7 +100,8 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 
 | 改了什么 | 生效方式 |
 |---|---|
-| `app.py` / `ocr.py` / `label.py` / `printing.py` / `config.json` | **自动重启服务**，几秒后生效 |
+| `app.py` / `ocr.py` / `label.py` / `printing.py` / `learned.py` | **自动重启服务**，几秒后生效 |
+| `config.json` / `learned.json` | **不监视**（故意的）。打印是先存配置、打完再记学习结果，监视它们会让 reloader 在出纸中途杀掉进程，spooler 只收到 0 字节的残废作业。这两个文件本来就是每次现读现用 |
 | `templates/*.html`、`static/*.js`、`static/*.css` | **不用重启**，浏览器刷新即可（静态文件已关缓存） |
 
 ```powershell
@@ -137,10 +138,32 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 | 文件 | 作用 |
 |---|---|
 | `app.py` | Flask 路由。`/api/ocr` 只识别；**只有 `/api/print` 会出纸** |
-| `ocr.py` | 图片走 RapidOCR → 按 y 聚类还原表格行；文本走 `parse_text()` 逐行拆词。两条路共用同一套 SKU 归一化与易混字纠正 |
+| `ocr.py` | 图片走 RapidOCR → 按 y 聚类还原表格行；文本走 `parse_text()` 逐行拆词。两条路共用同一套 SKU 归一化与易混字纠正。**无状态** —— 字典通过 `lookup=` 注入 |
+| `learned.py` | 从人工修正里学到的字典 / 映射 / 黑名单，见下节 |
 | `label.py` | 按 203dpi 出 1:1 像素位图，条码模块按**整数像素**逐条画，不让驱动缩放 |
 | `printing.py` | 枚举打印机与驱动纸张、DEVMODE 设自定义尺寸、GDI 逐页打印 |
-| `config.json` | 记住上次的打印机 / 纸张 / 版式，每次打印后自动更新 |
+| `config.json` | 记住上次的打印机 / 纸张 / 版式，每次打印后自动更新。**不进 git**（含 ERP 打印桥的 token）—— 新机器上从 `config.example.json` 复制一份；不复制也能跑，代码里有同样的默认值 |
+| `learned.json` | 学到的东西落盘在这里。不进 git（是客户 SKU 清单），删了就从头学 |
+
+## 会自己纠错
+
+图片 OCR 认错的 SKU，你在核对列表里改一次，它就记住了。**只作用在图片路径上** —— 粘贴的文本是人敲的，没有形近错，拿字典去动它只会帮倒忙。
+
+学三种东西：
+
+| 记什么 | 什么时候记 | 下次怎么用 |
+|---|---|---|
+| SKU 字典 | 打印成功（要攒够 2 次）；你亲手敲进去的（立刻算数） | 大小写回正、合并裁决、模糊匹配的目标 |
+| 错 → 对 映射 | 你把 X 改成 Y 时 | 见 X 直接改成 Y，行上标出来可撤销 |
+| 误识别黑名单 | 删行时你选了「这是误识别」 | 下次照样列出来，只是**默认不勾选并标灰** |
+
+分级套用，一条准绳：**能确定的才自动改，靠猜的只给建议**。
+
+- 精确映射命中、大小写回正 → 直接改，行下面标一行小字，可撤销
+- 形近模糊匹配（只认 `O↔0 I↔1 S↔5 B↔8 Z↔2 G↔6`，且段结构完全一致、候选唯一）→ **只给建议**。把一个真的新 SKU 静默改成旧的，那种错没人会发现
+- 含空格的 SKU（`MCH-SS V2`）：空格既可能是列分隔符又可能是 SKU 内字符，没有规则分得干净，只认字典命中。第一次它会出成 `MCH-SS`，你改一次，以后就对了
+
+自愈：你把 X 改成 Y 时，X 如果在字典里会被就地删掉（它刚被你判为错的），免得模糊匹配一直拿它当靠拢目标。出了岔子，页面底部「学到的纠错」面板能看能删，或者直接编辑 `learned.json`。
 
 ## 调整识别规则
 
@@ -148,12 +171,16 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 
 ```jsonc
 "ocr": {
-  "sku_regex": "^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,6}$",  // SKU 长什么样
-  "min_score": 0.85                                      // 低于此分数的行标黄
+  "sku_regex": "^[A-Za-z0-9]{2,6}(-[A-Za-z0-9]{1,6}){1,6}$",  // SKU 长什么样
+  "min_score": 0.85                                            // 低于此分数的行标黄
 }
 ```
 
-默认认 2~7 段、段间 `-` 的写法，覆盖 `EU-PRO-01`、`PHC-MIN-MP-WLB`、`SS-GLA-AUR-GLA-WLB-WH`、`A3-SS-DW-AUR-GLA-WLB` 这几类。
+默认认 2~7 段、段间 `-` 的写法，大小写都收（`UK4-SS-mn-GL-AU-BK` 里的 `mn` 就是小写），覆盖 `EU-PRO-01`、`PHC-MIN-MP-WLB`、`SS-GLA-AUR-GLA-WLB-WH`、`A3-SS-DW-AUR-GLA-WLB` 这几类。
+
+> **空格不要加进这个正则。** 加了之后描述列里的 `Wall Lamp`（4 + 4 字符）也成了合法 SKU，误判面直接炸开。含空格的 SKU 靠字典命中，见上一节。
+>
+> 这份 `sku_regex` 会**覆盖** `ocr.py` 里的默认值 —— 只改代码不改这里是不生效的。
 
 ## 常见问题
 

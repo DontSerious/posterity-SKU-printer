@@ -238,12 +238,19 @@ async function handleImage(blob) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'OCR failed');
     rows = (data.rows || []).map((r) => ({
-      selected: true,
+      selected: r.selected !== false,
       description: r.description || '',
       sku: r.sku,
       qty: r.qty,
       low_confidence: r.low_confidence,
       qty_detected: r.qty_detected,
+      // 学习用：source='ocr' 的行改了才值得记一条 错→对 映射，
+      // 人敲的和粘贴的没有形近错，只把结果收进白名单。
+      source: 'ocr',
+      origin: r.sku,
+      junk: !!r.junk,
+      corrected_from: r.corrected_from || null,
+      suggestion: r.suggestion || null,
     }));
     activeIndex = 0;
     renderTable();
@@ -291,6 +298,11 @@ async function parseText() {
       qty: r.qty,
       low_confidence: false,
       qty_detected: raw ? true : r.qty_detected,
+      source: 'text',
+      origin: r.sku,
+      junk: false,
+      corrected_from: null,
+      suggestion: null,
     }));
     activeIndex = 0;
     renderTable();
@@ -399,12 +411,26 @@ function renderTable() {
   rows.forEach((r, i) => {
     const tr = document.createElement('tr');
     if (r.low_confidence || !r.qty_detected) tr.classList.add('warn');
+    if (r.junk) tr.classList.add('junk');
     if (i === activeIndex) tr.classList.add('active');
+
+    // SKU 格下面挂一条小字：自动改了什么、或者有什么建议。
+    // 建议永远只是建议 —— 把一个真的新 SKU 静默改成旧的，那种错没人会发现。
+    let hint = '';
+    if (r.corrected_from) {
+      hint = `<div class="hint fixed">${esc(t('row.fixed', r.corrected_from))}
+              <button class="link undo">${esc(t('row.undo'))}</button></div>`;
+    } else if (r.suggestion) {
+      hint = `<div class="hint sug">${esc(t('row.suggest', r.suggestion))}
+              <button class="link take">${esc(t('row.take'))}</button></div>`;
+    } else if (r.junk) {
+      hint = `<div class="hint junked">${esc(t('row.junked'))}</div>`;
+    }
 
     tr.innerHTML = `
       <td><input type="checkbox" ${r.selected ? 'checked' : ''} data-k="selected"></td>
       <td><input type="text" value="${esc(r.description)}" data-k="description"></td>
-      <td><input type="text" class="sku" value="${esc(r.sku)}" data-k="sku"></td>
+      <td><input type="text" class="sku" value="${esc(r.sku)}" data-k="sku">${hint}</td>
       <td><input type="number" min="1" max="999" value="${r.qty}" data-k="qty"></td>
       <td><button class="del" title="${esc(t('row.del'))}">×</button></td>`;
 
@@ -418,18 +444,124 @@ function renderTable() {
         refreshSummary();
         if (k === 'sku') refreshPreview();
       });
+      // 学习走 change 不走 input —— 否则每敲一个字符就上报一条半截的映射
+      if (inp.dataset.k === 'sku') inp.addEventListener('change', () => { learnEdit(r); renderTable(); });
       inp.addEventListener('focus', () => { activeIndex = i; markActive(); refreshPreview(); });
     });
-    tr.querySelector('.del').addEventListener('click', () => {
-      rows.splice(i, 1);
-      if (activeIndex >= rows.length) activeIndex = Math.max(0, rows.length - 1);
+
+    const undo = tr.querySelector('.undo');
+    if (undo) undo.addEventListener('click', () => {
+      r.sku = r.corrected_from;       // 退回 OCR 原值；字典不动，要清就去管理面板
+      r.corrected_from = null;
       renderTable();
+    });
+    const take = tr.querySelector('.take');
+    if (take) take.addEventListener('click', () => {
+      r.sku = r.suggestion;           // 你点了采纳 = 亲口确认，按人工修正记账
+      r.suggestion = null;
+      learnEdit(r);
+      renderTable();
+    });
+
+    tr.querySelector('.del').addEventListener('click', () => {
+      // 只有 OCR 出来的行才值得问 —— 手动加的、粘贴来的删掉没有学习意义
+      if (r.source === 'ocr' && (r.sku || '').trim()) askDelete(tr, r, i);
+      else dropRow(i);
     });
     tb.appendChild(tr);
   });
   $('empty').classList.toggle('hidden', rows.length > 0);
   refreshSummary();
   refreshPreview();
+}
+
+function dropRow(i) {
+  rows.splice(i, 1);
+  if (activeIndex >= rows.length) activeIndex = Math.max(0, rows.length - 1);
+  renderTable();
+}
+
+function askDelete(tr, r, i) {
+  // 「误识别」和「这单不打」在操作上分不开，只能当场问一句。
+  // 猜错的代价不对称：把真 SKU 学成垃圾，以后会静默少打标签。
+  tr.classList.add('asking');
+  tr.innerHTML = `<td colspan="5" class="ask">
+      <span>${esc(t('row.ask', r.sku.trim()))}</span>
+      <button class="link a-junk">${esc(t('row.ask.junk'))}</button>
+      <button class="link a-once">${esc(t('row.ask.once'))}</button>
+      <button class="link a-cancel">${esc(t('row.ask.cancel'))}</button>
+    </td>`;
+  tr.querySelector('.a-junk').addEventListener('click', () => {
+    learn({ kind: 'junk', text: r.sku.trim() });
+    dropRow(i);
+  });
+  tr.querySelector('.a-once').addEventListener('click', () => dropRow(i));
+  tr.querySelector('.a-cancel').addEventListener('click', renderTable);
+}
+
+// --------------------------------------------------------------------------- //
+// 学习上报
+// --------------------------------------------------------------------------- //
+
+function learn(payload) {
+  // 学习失败绝不能挡住打印这条主路，记在控制台就够了
+  return fetch('/api/learn', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch((e) => console.warn('learn failed', e));
+}
+
+function learnEdit(r) {
+  const val = (r.sku || '').trim();
+  if (!val || val === r.origin) return;
+  if (r.source === 'ocr' && r.origin) {
+    learn({ kind: 'fix', wrong: r.origin, right: val });   // OCR 错了，你改对了
+  } else {
+    learn({ kind: 'sku', sku: val });                      // 人敲的，只进白名单
+  }
+  r.origin = val;          // 连着改第二次时，别把中间态当成 OCR 原值记进去
+  r.corrected_from = null;
+  r.suggestion = null;
+}
+
+async function loadLearned() {
+  const box = $('learnedBody');
+  box.textContent = t('learned.loading');
+  try {
+    renderLearned(await (await fetch('/api/learned')).json());
+  } catch (e) {
+    box.textContent = String(e.message || e);
+  }
+}
+
+function renderLearned(d) {
+  const box = $('learnedBody');
+  const sec = (title, items, li) => (items.length
+    ? `<div class="lsec"><h4>${esc(title)} (${items.length})</h4><ul>${items.map(li).join('')}</ul></div>`
+    : `<div class="lsec"><h4>${esc(title)}</h4><p class="lempty">${esc(t('learned.none'))}</p></div>`);
+  const del = (kind, key) => `<button class="link lx" data-kind="${kind}" data-key="${esc(key)}">×</button>`;
+
+  box.innerHTML =
+    sec(t('learned.skus'), d.skus, (s) => `<li class="${s.active ? '' : 'pending'}">
+        <code>${esc(s.sku)}</code>
+        <span class="lmeta">${s.active ? '' : esc(t('learned.pending', d.threshold - s.n))}</span>
+        ${del('skus', s.sku)}</li>`) +
+    sec(t('learned.fixes'), d.fixes, (f) => `<li>
+        <code>${esc(f.wrong)}</code> → <code>${esc(f.right)}</code>
+        ${del('fixes', f.wrong)}</li>`) +
+    sec(t('learned.junk'), d.junk, (j) => `<li>
+        <code>${esc(j.text)}</code>
+        ${del('junk', j.text)}</li>`);
+
+  box.querySelectorAll('.lx').forEach((b) => b.addEventListener('click', async () => {
+    const res = await fetch('/api/learned', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: b.dataset.kind, key: b.dataset.key }),
+    });
+    renderLearned(await res.json());
+  }));
 }
 
 function markActive() {
@@ -603,8 +735,13 @@ function bind() {
     rows.forEach((r) => { r.selected = e.target.checked; });
     renderTable();
   });
+  // 展开时才拉，别在页面加载时多打一次接口
+  $('learnedWrap').addEventListener('toggle', (e) => { if (e.target.open) loadLearned(); });
   $('addRow').addEventListener('click', () => {
-    rows.push({ selected: true, description: '', sku: '', qty: 1, low_confidence: false, qty_detected: true });
+    rows.push({
+      selected: true, description: '', sku: '', qty: 1, low_confidence: false, qty_detected: true,
+      source: 'manual', origin: '', junk: false, corrected_from: null, suggestion: null,
+    });
     activeIndex = rows.length - 1;
     renderTable();
   });

@@ -10,7 +10,10 @@ import re
 import threading
 
 # 2~7 段，段间用 '-'：EU-PRO-01 / PHC-MIN-MP-WLB / SS-GLA-AUR-GLA-WLB-WH
-DEFAULT_SKU_REGEX = r"^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,6}$"
+# 大小写都收：SKU 是大小写敏感的（UK4-SS-mn-GL-AU-BK 里的 mn 就是小写）。
+# 空格**不能**进这个正则 —— 否则描述列里的 "Wall Lamp" 也成了合法 SKU。
+# 含空格的 SKU（MCH-SS V2）只认字典命中，见 learned.py 的合并裁决。
+DEFAULT_SKU_REGEX = r"^[A-Za-z0-9]{2,6}(-[A-Za-z0-9]{1,6}){1,6}$"
 DEFAULT_MIN_SCORE = 0.85
 
 _engine = None
@@ -74,27 +77,33 @@ def _raw_items(result) -> list[tuple[list, str, float]]:
 
 _DASHES = "‐‑‒–—―−－·•_"
 
-# OCR 常把西里尔/希腊/全角字符认成形近的拉丁字母，先统一成拉丁再谈别的
+# OCR 常把西里尔/希腊/全角字符认成形近的拉丁字母，先统一成拉丁再谈别的。
+# 大小写两套都要 —— 不再无条件 upper 之后，小写西里尔不会再被大写表兜住。
 _HOMOGLYPHS = str.maketrans({
     "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O",
     "Р": "P", "С": "C", "Т": "T", "У": "Y", "Х": "X", "І": "I", "Ј": "J",
     "З": "3", "Ѕ": "S", "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H",
     "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T",
     "Υ": "Y", "Χ": "X",
+    "а": "a", "в": "b", "е": "e", "к": "k", "м": "m", "о": "o", "р": "p",
+    "с": "c", "т": "t", "у": "y", "х": "x", "і": "i", "ј": "j", "ѕ": "s",
+    "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "μ": "m", "ν": "v",
+    "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
 })
 _ALPHA_TO_DIGIT = str.maketrans({"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1",
                                  "S": "5", "B": "8", "Z": "2", "G": "6", "T": "7"})
-_DIGIT_TO_ALPHA = str.maketrans({"0": "O", "1": "I", "5": "S", "8": "B", "2": "Z"})
 
 
 def normalize_sku(text: str, correct_ocr: bool = True) -> str:
-    """清洗 SKU：统一破折号、去空格。
+    """清洗 SKU：统一破折号、去空格。**大小写原样保留**。
 
-    correct_ocr=True（图片 OCR）时额外按段纠正易混字（O↔0、S↔5…）。
-    粘贴文本是人打的、没有形近错误，必须传 False —— 否则会把 `80-SS-BK`
-    的首段 `80` 误判成字母前缀改成 `BO`。
+    SKU 是大小写敏感的（`UK4-SS-mn-GL-AU-BK` 里的 `mn` 就是小写），而 OCR
+    本来就认得出来 —— 从前那句 `.upper()` 是在毁自己刚拿到的正确数据。
+
+    correct_ocr=True（图片 OCR）时额外按段纠正易混字，但只往一个方向推、
+    且必须有段内佐证，见下面的注释。粘贴文本是人敲的、没有形近错误，传 False。
     """
-    s = text.strip().upper()
+    s = text.strip()
     if correct_ocr:
         s = s.translate(_HOMOGLYPHS)  # 西里尔/希腊形近字，也只对 OCR 有意义
     for d in _DASHES:
@@ -106,23 +115,19 @@ def normalize_sku(text: str, correct_ocr: bool = True) -> str:
     if not correct_ocr:
         return s
 
-    segs = s.split("-")
-    last = len(segs) - 1
     fixed = []
-    for i, seg in enumerate(segs):
-        as_digit = seg.translate(_ALPHA_TO_DIGIT)   # O→0 I→1 S→5 ...
-        as_alpha = seg.translate(_DIGIT_TO_ALPHA)   # 0→O 1→I 5→S ...
-        can_digit = as_digit.isdigit()
-        can_alpha = as_alpha.isalpha()
-        if can_digit and can_alpha:
-            # 两边都说得通：尾段按流水号当数字，前面的段当字母前缀
-            fixed.append(as_digit if i == last else as_alpha)
-        elif can_digit:
+    for seg in s.split("-"):
+        # 只有「段内本来就有真数字」时，才敢把剩下的字母往数字推（O1 → 01）。
+        #
+        # 从前这里还做两件事，都已删掉，因为毁的比救的多：
+        #   · 尾段两解时一律当流水号 → MCH-SS 被毁成 MCH-55、PHC-ELE-BS → -85
+        #   · 反向的 0→O 1→I 整段推断 → V2 被毁成 VZ、A1B → AIB、80- → BO-
+        # 代价是 8K → BK 这类首字符误读不再自动纠，交给 learned.py 的字典。
+        as_digit = seg.translate(_ALPHA_TO_DIGIT)
+        if as_digit.isdigit() and any(c.isdigit() for c in seg):
             fixed.append(as_digit)
-        elif can_alpha:
-            fixed.append(as_alpha)
         else:
-            fixed.append(seg)  # 真正混合的段（如 A1B）保持原样，交给人工核对
+            fixed.append(seg)
     return "-".join(fixed)
 
 
@@ -212,6 +217,34 @@ def _cluster_rows(cells: list[dict]) -> list[list[dict]]:
     return rows
 
 
+def _join_dangling_dash(row: list[dict]) -> list[dict]:
+    """把被空格拆断的 SKU 粘回去：`SAN-NAT-` + `CRY` → `SAN-NAT-CRY`。
+
+    OCR 把 `SAN-NAT- CRY` 整个读进一个框，_explode 按空格拆成两个 token，而
+    `SAN-NAT-` 去掉尾连字符后**本身就是合法的 2 段 SKU** —— parse_rows 取第一个
+    匹配就收工，`CRY` 被当右侧杂项扔了，打出来是一张看起来完全正常的错标签。
+
+    以 '-' 结尾（或右邻以 '-' 开头）的 token 不可能是完整 SKU，所以这一粘是
+    零歧义的，不用查字典。空格两侧都没有连字符的那种（`MCH-SS V2`）才需要
+    字典裁决，见 learned.py。
+    """
+    out: list[dict] = []
+    for c in row:
+        prev = out[-1] if out else None
+        if prev is not None and (prev["text"].endswith("-") or c["text"].startswith("-")):
+            prev["text"] += c["text"]
+            prev["x1"] = max(prev["x1"], c["x1"])
+            prev["cx"] = (prev["x0"] + prev["x1"]) / 2
+            prev["top"] = min(prev["top"], c["top"])
+            prev["bot"] = max(prev["bot"], c["bot"])
+            prev["cy"] = (prev["top"] + prev["bot"]) / 2
+            prev["h"] = max(1.0, prev["bot"] - prev["top"])
+            prev["score"] = min(prev["score"], c["score"])
+            continue
+        out.append(dict(c))
+    return out
+
+
 def _split_multi_sku(row: list[dict], pattern: re.Pattern) -> list[list[dict]]:
     """一簇里出现多个 SKU（行距过小被聚到一起）时，按 y 就近拆开。"""
     anchors = [c for c in row if _looks_like_sku(c["text"], pattern)]
@@ -224,7 +257,10 @@ def _split_multi_sku(row: list[dict], pattern: re.Pattern) -> list[list[dict]]:
     return [sorted(g, key=lambda c: c["cx"]) for g in groups if g]
 
 
-def parse_rows(items, sku_regex: str = DEFAULT_SKU_REGEX, min_score: float = DEFAULT_MIN_SCORE):
+def parse_rows(items, sku_regex: str = DEFAULT_SKU_REGEX, min_score: float = DEFAULT_MIN_SCORE,
+               lookup=None):
+    """lookup 是可选的裁判（learned 模块），给出 fix/known/suggest/is_junk 四个方法。
+    不传就是纯规则模式 —— 本模块因此仍然无状态、可单测。"""
     pattern = re.compile(sku_regex)
 
     cells: list[dict] = []
@@ -232,7 +268,8 @@ def parse_rows(items, sku_regex: str = DEFAULT_SKU_REGEX, min_score: float = DEF
         cells.extend(_explode(box, txt, score))
 
     results = []
-    clusters = [sub for row in _cluster_rows(cells) for sub in _split_multi_sku(row, pattern)]
+    joined = [_join_dangling_dash(row) for row in _cluster_rows(cells)]
+    clusters = [sub for row in joined for sub in _split_multi_sku(row, pattern)]
     for row in clusters:
         sku_idx = None
         sku_val = None
@@ -244,10 +281,34 @@ def parse_rows(items, sku_regex: str = DEFAULT_SKU_REGEX, min_score: float = DEF
         if sku_idx is None:
             continue  # 表头行、标题行、空行都在这里被自然过滤掉
 
+        # 合并裁决：`MCH-SS` + `V2` → 字典里确实有 `MCH-SS V2` 才认，否则不猜。
+        # 空格既可能是列分隔符、又可能是 SKU 内的字符，没有哪条规则分得干净
+        # （猜错的后果是把 `US-PRO-06` 和数量列 `1` 粘成假 SKU），只有字典能裁。
+        sku_end = sku_idx
+        if lookup is not None:
+            probe = row[sku_idx]["text"].strip()
+            for j in range(sku_idx + 1, len(row)):
+                probe = f"{probe} {row[j]['text'].strip()}"
+                hit = lookup.known(probe)
+                if not hit:
+                    break
+                sku_val, sku_end = hit, j
+
+        # 分级套用：你亲口教过的直接改，大小写回正也直接改，模糊匹配只给建议。
+        corrected_from = None
+        suggestion = None
+        if lookup is not None:
+            hit = lookup.fix(sku_val) or lookup.known(sku_val)
+            if hit and hit != sku_val:
+                corrected_from, sku_val = sku_val, hit
+            else:
+                suggestion = lookup.suggest(sku_val)
+        junk = bool(lookup is not None and lookup.is_junk(sku_val))
+
         # 数量：SKU 右侧最靠右的整数（也认 X3 / (3) 这类写法）
         qty = None
         qty_found = False
-        for cell in reversed(row[sku_idx + 1:]):
+        for cell in reversed(row[sku_end + 1:]):
             val = _read_qty(cell["text"].strip())
             if val is not None:
                 qty = val
@@ -266,14 +327,18 @@ def parse_rows(items, sku_regex: str = DEFAULT_SKU_REGEX, min_score: float = DEF
         results.append(
             {
                 "sku": sku_val,
-                "sku_raw": row[sku_idx]["text"].strip(),
+                "sku_raw": " ".join(c["text"].strip() for c in row[sku_idx:sku_end + 1]),
                 "qty": qty,
                 "qty_detected": qty_found,
                 "description": description,
                 "confidence": round(float(score), 3),
                 "low_confidence": score < min_score,
                 "row_y": row[sku_idx]["cy"],
-                "selected": True,
+                # 判过是误识别的照样列出来，只是默认不勾选 —— 静默丢行比多列一行糟得多
+                "selected": not junk,
+                "junk": junk,
+                "corrected_from": corrected_from,
+                "suggestion": suggestion,
             }
         )
 
@@ -437,11 +502,12 @@ def recognize(
     image_bytes: bytes,
     sku_regex: str = DEFAULT_SKU_REGEX,
     min_score: float = DEFAULT_MIN_SCORE,
+    lookup=None,
 ) -> dict:
     engine = get_engine()
     result = engine(image_bytes)
     items = _raw_items(result)
-    rows = parse_rows(items, sku_regex, min_score)
+    rows = parse_rows(items, sku_regex, min_score, lookup=lookup)
     return {
         "rows": rows,
         "raw_count": len(items),

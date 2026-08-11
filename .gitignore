@@ -8,3 +8,10 @@ __pycache__/
 output/
 
 logs/
+
+# 从人工修正里学到的字典（learned.py）：本机运行数据，且是客户 SKU 清单
+learned.json
+learned.json.tmp
+
+# 本机配置，含 ERP 打印桥的 token。新机器从 config.example.json 复制一份
+config.json

@@ -112,7 +112,33 @@ td input.sku { font-family: Consolas, monospace; font-weight: 600; letter-spacin
 tr.warn td { background: #fffaea; }
 tr.warn td input.sku { border-color: #e8c163; }
 tr.active td { background: #eef4ff; }
+/* 判过是误识别的行：照样列出来，只是一眼能看出被压下去了 —— 静默丢行更危险 */
+tr.junk td { background: #f6f7f8; }
+tr.junk td input.sku { color: #98a1ab; }
 .empty { color: #98a1ab; font-size: 13px; text-align: center; padding: 34px 0; margin: 0; }
+
+/* SKU 格下面那行小字：自动改了什么 / 有什么建议 */
+.hint { margin-top: 3px; font-size: 11px; line-height: 1.5; color: #77808c; }
+.hint.fixed { color: #2f7d4f; }
+.hint.sug { color: #97701a; }
+.hint button.link { font-size: 11px; margin-left: 4px; }
+td.ask { padding: 9px 10px; background: #fffaea; font-size: 12px; color: #5b646f; }
+td.ask button.link { margin-left: 12px; }
+
+/* 学到的纠错 —— 管理面板 */
+.learned { font-size: 12px; padding: 4px 2px 2px; }
+.lsec { margin: 6px 0 10px; }
+.lsec h4 { margin: 0 0 5px; font-size: 12px; font-weight: 600; color: #5b646f; }
+.lsec ul { list-style: none; margin: 0; padding: 0; }
+.lsec li { display: flex; align-items: center; gap: 7px; padding: 2px 0; }
+.lsec li.pending code { opacity: .5; }
+.lsec code {
+  font: 12px Consolas, monospace; background: #f4f6f8;
+  border: 1px solid #edf0f3; border-radius: 3px; padding: 1px 5px;
+}
+.lmeta { color: #98a1ab; font-size: 11px; }
+.lempty { margin: 0; color: #98a1ab; }
+button.link.lx { color: #c0392b; font-size: 13px; line-height: 1; }
 
 .raw { border-top: 1px solid #edf0f3; margin-top: 12px; padding-top: 8px; }
 .raw summary { cursor: pointer; font-size: 12px; color: #77808c; }

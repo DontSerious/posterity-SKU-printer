@@ -18,7 +18,14 @@
     "text_fill_pct": 0
   },
   "ocr": {
-    "sku_regex": "^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,6}$",
+    "sku_regex": "^[A-Za-z0-9]{2,6}(-[A-Za-z0-9]{1,6}){1,6}$",
     "min_score": 0.85
+  },
+  "erp": {
+    "enabled": false,
+    "url": "https://erp.posterityindustries.com",
+    "token": "",
+    "name": "office",
+    "poll_seconds": 3
   }
 }
