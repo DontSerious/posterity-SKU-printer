@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import math
 from dataclasses import dataclass, asdict
+from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -31,6 +32,23 @@ _FONT_CANDIDATES = [
     r"C:\Windows\Fonts\arialbd.ttf",
     r"C:\Windows\Fonts\segoeuib.ttf",
 ]
+
+# 上面三个字体一个中文字形都没有，PIL 会把每个汉字画成该字体的 .notdef
+# （Consolas 下是个 "▯?" 方框，实测「中文标签」出四个方框）。含中文/日文的
+# 标签往后落到这一组：203dpi 热敏上笔画粗细均匀的黑体最清晰，微软雅黑次之，
+# 宋体笔画细、小字号会糊成一团，只做兜底。
+_CJK_FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\simhei.ttf",   # 黑体
+    r"C:\Windows\Fonts\msyhbd.ttc",   # 微软雅黑 Bold
+    r"C:\Windows\Fonts\msyh.ttc",     # 微软雅黑
+    r"C:\Windows\Fonts\Deng.ttf",     # 等线
+    r"C:\Windows\Fonts\simsun.ttc",   # 宋体
+]
+
+_ALL_FONTS = _FONT_CANDIDATES + _CJK_FONT_CANDIDATES
+
+# 非字符码位，任何字体都不会给它映射字形，渲染出来的就是该字体的 .notdef 本身
+_NOTDEF_CHAR = "\uffff"
 
 
 @dataclass
@@ -69,7 +87,15 @@ def code128_modules(data: str) -> str:
     """返回 Code128 的模块串，'1' = 黑，'0' = 白。"""
     from barcode import Code128
 
-    built = Code128(data).build()
+    try:
+        built = Code128(data).build()
+    except Exception as exc:  # noqa: BLE001  python-barcode 抛的是自定义异常类
+        # Code128 只编 ASCII。中文/全角标签要走「只印文字（不生成条码）」，
+        # 光把 python-barcode 的英文异常抛给前端没人看得懂该改哪个开关。
+        raise ValueError(
+            f"Code128 编不了「{data}」里的字符（条码只支持 ASCII）；"
+            f"要打中文请勾上「只印文字（不生成条码）」。原始报错：{exc}"
+        ) from exc
     if not built:
         raise ValueError(f"无法为 {data!r} 生成 Code128")
     modules = built[0]
@@ -115,8 +141,48 @@ def _module_width(n_modules: int, canvas_w: int, avail_w: int, layout: Layout) -
     return float(m)
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
-    for path in _FONT_CANDIDATES:
+@lru_cache(maxsize=512)
+def _glyph_bitmap(path: str, ch: str) -> bytes | None:
+    """把单个字符用 path 这个字体画出来，返回位图字节。字体加载不了返回 None。"""
+    try:
+        font = ImageFont.truetype(path, 20)
+    except OSError:
+        return None
+    img = Image.new("L", (64, 64), 0)
+    ImageDraw.Draw(img).text((6, 6), ch, font=font, fill=255)
+    return img.tobytes()
+
+
+@lru_cache(maxsize=256)
+def _covers(path: str, text: str) -> bool:
+    """path 这个字体画得出 text 里的每个字符吗？
+
+    Pillow 没有查 cmap 的公开接口，所以直接比位图：缺字形的字符渲染出来的就是
+    该字体的 .notdef，和 _NOTDEF_CHAR 的位图逐字节相同。不能只比 bbox —— 等宽
+    字体（Consolas）里每个字符的 bbox 都一样，那样会把 ASCII 也判成缺失。
+    覆盖与否和字号无关，固定用 20 号测一次并缓存。
+    """
+    notdef = _glyph_bitmap(path, _NOTDEF_CHAR)
+    if notdef is None:
+        return False
+    return all(
+        _glyph_bitmap(path, c) != notdef
+        for c in set(text)
+        if not c.isspace()
+    )
+
+
+def _load_font(size: int, text: str = "") -> ImageFont.FreeTypeFont:
+    """挑第一个能画全 text 的字体。text 为空时退化成原来的「第一个能加载的」。"""
+    if text:
+        for path in _ALL_FONTS:
+            if _covers(path, text):
+                try:
+                    return ImageFont.truetype(path, size)
+                except OSError:
+                    continue
+    # 一个候选都盖不住（生僻字、emoji）：按原顺序退回，宁可印方框也不要崩
+    for path in _ALL_FONTS:
         try:
             return ImageFont.truetype(path, size)
         except OSError:
@@ -129,7 +195,7 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int):
     lo, hi, best = 6, max(8, max_h * 2), None
     while lo <= hi:
         mid = (lo + hi) // 2
-        font = _load_font(mid)
+        font = _load_font(mid, text)
         l, t, r, b = draw.textbbox((0, 0), text, font=font)
         if (r - l) <= max_w and (b - t) <= max_h:
             best = (font, r - l, b - t, l, t)
@@ -137,7 +203,7 @@ def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_w: int, max_h: int):
         else:
             hi = mid - 1
     if best is None:
-        font = _load_font(6)
+        font = _load_font(6, text)
         l, t, r, b = draw.textbbox((0, 0), text, font=font)
         best = (font, r - l, b - t, l, t)
     return best
@@ -168,7 +234,7 @@ def _render_text_only(text: str, w: int, h: int, layout: Layout) -> Image.Image:
     # 纵向拉伸：字形只能等比缩放，所以把文字画成蒙版再非等比缩到目标高度。
     # 先按 4 倍字号画大图，全程降采样 —— 直接放大会把边缘搓成锯齿。
     target_h = max(1, min(h, int(round(h * fill / 100.0))))
-    big = _load_font(min(800, max(8, int((getattr(font, "size", 0) or 12) * 4))))
+    big = _load_font(min(800, max(8, int((getattr(font, "size", 0) or 12) * 4))), text)
     l, t, r, b = draw.textbbox((0, 0), text, font=big)
     tmp = Image.new("L", (max(1, r - l), max(1, b - t)), 0)
     ImageDraw.Draw(tmp).text((-l, -t), text, font=big, fill=255)
