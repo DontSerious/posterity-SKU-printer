@@ -130,6 +130,48 @@ def api_papers():
     )
 
 
+@app.get("/api/health")
+def api_health():
+    """给 80 端口那个面板读的一行体检。只读，不碰打印机的任何状态。
+
+    面板是另一个进程（C:\\Project\\sandsara-panel），它不 import 这里的任何代码 ——
+    那要 pywin32 和 OCR 那一堆依赖。所以两边的接口就是这个端点，加不加它都不影响
+    打印本身：面板拿不到就照实显示「这个版本还没有 /api/health」。
+    """
+    # printing / erp_bridge 在这个文件里一律是函数内导入（pywin32 和 OCR 那一堆
+    # 拖启动），照着来，别提到模块顶上去。erp_bridge 更是只在 __main__ 里被
+    # import 过，模块级根本没有这个名字。
+    import printing
+    import erp_bridge
+
+    cfg = load_config()
+    printer = cfg.get("printer") or ""
+    online = False
+    if printer:
+        try:
+            online = any(p["name"] == printer for p in printing.list_printers())
+        except Exception:  # noqa: BLE001  枚举打印机偶尔会抛，那也是一种「不在线」
+            online = False
+    paper = cfg.get("paper") or {}
+    if paper.get("mode") == "custom":
+        paper_txt = "%g × %g mm" % (paper.get("width_mm", 0), paper.get("height_mm", 0))
+    else:
+        paper_txt = "驱动纸张 #%s" % paper.get("paper_id", "?")
+
+    erp = cfg.get("erp") or {}
+    st = erp_bridge.status if erp.get("enabled") else {}
+    return jsonify({
+        "printer": printer,
+        "printer_online": online,
+        "paper": paper_txt,
+        "erp_enabled": bool(erp.get("enabled")),
+        "erp_last_ok": st.get("last_ok", 0),
+        "erp_error": st.get("last_error", ""),
+        "erp_error_at": st.get("last_error_at", 0),
+        "erp_jobs": st.get("jobs", 0),
+    })
+
+
 @app.route("/api/config", methods=["GET", "POST"])
 def api_config():
     if request.method == "GET":

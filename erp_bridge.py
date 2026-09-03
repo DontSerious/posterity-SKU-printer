@@ -28,6 +28,12 @@ import urllib.request
 
 _TIMEOUT = 25
 
+# 桥的健康状态，给首页那个面板读（app.py 的 /api/panel/status）。
+# 在这里而不是在日志里，是因为"桥现在通不通"以前只能靠翻 logs/service.log 里的
+# [erp-bridge] 行才知道 —— 而它断了不会有任何人被通知。只写不读，线程安全靠
+# GIL：每个字段都是一次整体赋值。
+status = {"last_ok": 0.0, "last_error": "", "last_error_at": 0.0, "jobs": 0}
+
 
 def _post(url: str, token: str, payload: dict) -> dict:
     req = urllib.request.Request(
@@ -80,8 +86,11 @@ def _loop(cfg_loader):
                 printers = []
             r = _post(f"{base}/api/print-bridge/poll", token,
                       {"name": erp.get("name") or "office", "printers": printers})
+            status["last_ok"] = time.time()
+            status["last_error"] = ""
             job = (r or {}).get("job")
             if job:
+                status["jobs"] += 1
                 try:
                     result = _handle_job(job, erp)
                 except Exception as exc:  # noqa: BLE001
@@ -91,12 +100,17 @@ def _loop(cfg_loader):
                 print(f"[erp-bridge] job {job['id']} -> {state}")
                 continue          # 队列可能还有任务，马上再问一轮
         except urllib.error.HTTPError as exc:
+            status["last_error"] = f"HTTP {exc.code} {exc.reason}"
+            status["last_error_at"] = time.time()
             if exc.code == 401:
+                status["last_error"] = "token 被 ERP 拒绝（401）"
                 print("[erp-bridge] token 被 ERP 拒绝（401）—— 核对 config.json 的 erp.token")
                 time.sleep(30)
                 continue
             print(f"[erp-bridge] HTTP {exc.code}: {exc.reason}")
         except Exception as exc:  # noqa: BLE001
+            status["last_error"] = f"{type(exc).__name__}: {exc}"
+            status["last_error_at"] = time.time()
             print(f"[erp-bridge] {type(exc).__name__}: {exc}")
         try:
             delay = max(2, int(erp.get("poll_seconds") or 3))
