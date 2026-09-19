@@ -192,6 +192,26 @@ def print_labels(
     }
 
 
+def fit_to_canvas(img, w_px: int, h_px: int):
+    """把一页放到 w_px × h_px 的白底画布上：方向不一致先转 90°，再等比缩放居中。
+
+    等比而不是拉伸，是因为纸张可以和页面不同形状（正方形的快递面单打到
+    60 × 30 的纸上），拉伸会把条码的模块宽度压歪。页面和纸张同比例时结果
+    就是铺满整页，和以前一样。
+    """
+    from PIL import Image
+
+    if (img.width >= img.height) != (w_px >= h_px):
+        img = img.rotate(90, expand=True)
+    scale = min(w_px / img.width, h_px / img.height)
+    tw = max(1, int(round(img.width * scale)))
+    th = max(1, int(round(img.height * scale)))
+    page = img.convert("RGB").resize((tw, th), Image.LANCZOS)
+    canvas = Image.new("RGB", (w_px, h_px), "white")
+    canvas.paste(page, ((w_px - tw) // 2, (h_px - th) // 2))
+    return canvas
+
+
 def print_images(
     printer: str,
     images: list,
@@ -199,11 +219,11 @@ def print_images(
     copies: int = 1,
     job_name: str = "Label file",
 ) -> dict:
-    """打印现成的图片（PDF 每页一张 / 上传的 PNG），缩放铺满整页。
+    """打印现成的图片（PDF 每页一张 / 上传的 PNG），等比缩放居中到整页。
 
     与 print_labels 的区别：不渲染条码，图片是外部生成的（比如 ERP 导出的
     二维码标签 PDF）。页面方向与纸张不一致时自动旋转 90°，所以横版 PDF
-    打竖装的纸也不会被压扁。
+    打竖装的纸也不会被压扁；纸张比例和页面不同时留白，不拉伸。
     """
     if not images:
         return {"ok": False, "error": "没有可打印的页面", "printed": 0}
@@ -217,9 +237,7 @@ def print_images(
         printed = 0
         try:
             for img in images:
-                if (img.width >= img.height) != (w_px >= h_px):
-                    img = img.rotate(90, expand=True)
-                dib = ImageWin.Dib(img.convert("RGB"))
+                dib = ImageWin.Dib(fit_to_canvas(img, w_px, h_px))
                 for _ in range(max(1, int(copies))):
                     dc.StartPage()
                     dib.draw(dc.GetHandleOutput(), (0, 0, w_px, h_px))
@@ -238,10 +256,20 @@ def dry_run_images(
     copies: int = 1,
     out_dir: str = "output",
     stem: str = "file",
+    paper: PaperSpec | None = None,
+    dpi: int = 203,
 ) -> dict:
-    """干跑：把每页存成 PNG，不出纸。"""
+    """干跑：把每页存成 PNG，不出纸。
+
+    给了 paper 就先按纸张尺寸合成（和真打一样等比缩放居中），PNG 看到的就是
+    出纸的样子；不给则原样存页面。
+    """
     os.makedirs(out_dir, exist_ok=True)
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem) or "file"
+    if paper is not None:
+        w_px = max(1, int(round(paper.width_mm / 25.4 * dpi)))
+        h_px = max(1, int(round(paper.height_mm / 25.4 * dpi)))
+        images = [fit_to_canvas(img, w_px, h_px) for img in images]
     files = []
     for i, img in enumerate(images, 1):
         path = os.path.join(out_dir, f"{safe}_p{i}.png")

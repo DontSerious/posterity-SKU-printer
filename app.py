@@ -318,8 +318,9 @@ def api_file_info():
 
 @app.post("/api/print-file")
 def api_print_file():
-    """打印上传的 PDF/图片。PDF 的纸张尺寸取自文件本身（ERP 的标签 PDF
-    每页就是一张标签的物理尺寸）；图片则用表单里带来的纸张设置。"""
+    """打印上传的 PDF/图片。PDF 的纸张尺寸默认取自文件本身（ERP 的标签 PDF
+    每页就是一张标签的物理尺寸）；表单带 use_paper=1 时改用右侧的纸张设置，
+    页面等比缩放居中放上去；图片一律用纸张设置。"""
     import printing
 
     f = request.files.get("file")
@@ -327,13 +328,14 @@ def api_print_file():
         return jsonify({"ok": False, "error": "没有收到文件"}), 400
     copies = max(1, int(request.form.get("copies", 1) or 1))
     dry_run = request.form.get("dry_run") == "1"
+    use_paper = request.form.get("use_paper") == "1"
 
     try:
         pages, w_mm, h_mm = _pages_from_upload(f.read(), f.filename, dpi=300)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": f"读取文件失败: {exc}"}), 400
 
-    if w_mm:
+    if w_mm and not use_paper:
         paper = printing.PaperSpec(width_mm=w_mm, height_mm=h_mm)
     else:
         try:
@@ -346,6 +348,7 @@ def api_print_file():
             res = printing.dry_run_images(
                 pages, copies, os.path.join(BASE_DIR, "output"),
                 stem=os.path.splitext(os.path.basename(f.filename or "file"))[0],
+                paper=paper,
             )
         else:
             printer = request.form.get("printer") or ""

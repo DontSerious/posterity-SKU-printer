@@ -362,13 +362,40 @@ async function handleDocFile(f) {
   }
 }
 
+// 「打印文件」页签自己的纸张选择。返回 null 表示「取自 PDF」（沿用文件自身尺寸）。
+function filePaperSpec() {
+  const v = $('filePaper').value;
+  if (v === 'pdf') return null;
+  let w, h;
+  if (v === 'custom') {
+    w = parseFloat($('fileWmm').value);
+    h = parseFloat($('fileHmm').value);
+  } else {
+    [w, h] = v.split('x').map(parseFloat);
+  }
+  if (!(w >= 10) || !(h >= 10)) return null;
+  return { mode: 'custom', paper_id: 256, width_mm: w, height_mm: h };
+}
+
+function syncFilePaperUi() {
+  $('filePaperCustom').classList.toggle('hidden', $('filePaper').value !== 'custom');
+  try {
+    localStorage.setItem('filePaper', JSON.stringify({
+      sel: $('filePaper').value, w: $('fileWmm').value, h: $('fileHmm').value,
+    }));
+  } catch (e) { /* 隐私模式等情况下 localStorage 不可用 */ }
+}
+
 async function submitFilePrint(dryRun) {
   if (!pickedFile) return;
   const copies = Math.max(1, parseInt($('fileCopies').value || '1', 10));
   const pages = pickedInfo ? pickedInfo.pages : 1;
-  const p = paperSpec();
-  const wmm = (pickedInfo && pickedInfo.width_mm) ? pickedInfo.width_mm : p.width_mm;
-  const hmm = (pickedInfo && pickedInfo.height_mm) ? pickedInfo.height_mm : p.height_mm;
+  const p = filePaperSpec();
+  const fromPdf = !p && pickedInfo && pickedInfo.width_mm;
+  // 图片没有自带尺寸，选「取自 PDF」时退到底部打印设置的纸张
+  const fallback = p || paperSpec();
+  const wmm = fromPdf ? pickedInfo.width_mm : fallback.width_mm;
+  const hmm = fromPdf ? pickedInfo.height_mm : fallback.height_mm;
   if (!dryRun &&
       !confirm(t('file.confirm', pickedFile.name, pages, copies, pages * copies,
                  $('printer').value, wmm, hmm))) return;
@@ -383,7 +410,8 @@ async function submitFilePrint(dryRun) {
   fd.append('printer', $('printer').value);
   fd.append('copies', String(copies));
   fd.append('dry_run', dryRun ? '1' : '0');
-  fd.append('paper', JSON.stringify(p));   // 只对图片生效；PDF 尺寸取自文件
+  fd.append('paper', JSON.stringify(fallback));   // 图片一律用它；PDF 只在 use_paper 时用
+  fd.append('use_paper', p ? '1' : '0');
   try {
     const res = await fetch('/api/print-file', { method: 'POST', body: fd });
     const data = await res.json();
@@ -765,6 +793,19 @@ function bind() {
   });
   $('filePrint').addEventListener('click', () => submitFilePrint(false));
   $('fileDry').addEventListener('click', () => submitFilePrint(true));
+  // 页签自己的纸张选择记在浏览器里：同一台机器通常固定装一种纸
+  try {
+    const saved = JSON.parse(localStorage.getItem('filePaper') || 'null');
+    if (saved && saved.sel) {
+      if ([...$('filePaper').options].some((o) => o.value === saved.sel)) $('filePaper').value = saved.sel;
+      if (saved.w) $('fileWmm').value = saved.w;
+      if (saved.h) $('fileHmm').value = saved.h;
+    }
+  } catch (e) { /* 隐私模式等情况下 localStorage 不可用，按默认「取自 PDF」 */ }
+  $('filePaper').addEventListener('change', syncFilePaperUi);
+  $('fileWmm').addEventListener('change', syncFilePaperUi);
+  $('fileHmm').addEventListener('change', syncFilePaperUi);
+  syncFilePaperUi();
 }
 
 init();
