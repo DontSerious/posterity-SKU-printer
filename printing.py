@@ -287,6 +287,17 @@ def print_images(
     return {"ok": True, "printed": printed, "canvas_px": [w_px, h_px]}
 
 
+def backfeed(printer: str, paper: PaperSpec) -> dict:
+    """往回退一张纸（标签高 + 间隙），收回装纸时多走出去的那张空白。不出纸。
+
+    只有 TSPL 直写那条路能做：Windows 上中间隔着驱动，GDI 没有"退纸"这个动作。
+    """
+    if WINDOWS:
+        raise RuntimeError("回退纸只在 gw（Linux，TSPL 直写）上支持")
+    dots = _tspl.backfeed(printer, paper.width_mm, paper.height_mm)
+    return {"ok": True, "dots": dots, "mm": round(dots / _tspl.DPI * 25.4, 1)}
+
+
 def dry_run_images(
     images: list,
     copies: int = 1,

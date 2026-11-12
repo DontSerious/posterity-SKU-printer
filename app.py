@@ -364,6 +364,21 @@ def api_print_file():
     return jsonify(res)
 
 
+@app.post("/api/backfeed")
+def api_backfeed():
+    """往回退一张纸。不出纸，只动走纸电机，所以不像 /api/print 那样记配置、记学习结果。"""
+    import printing
+
+    payload = request.get_json(silent=True) or {}
+    printer = payload.get("printer") or ""
+    if not printer:
+        return jsonify({"ok": False, "error": "没有选择打印机"}), 400
+    try:
+        return jsonify(printing.backfeed(printer, _paper_from(payload)))
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"回退失败: {exc}"}), 500
+
+
 # --------------------------------------------------------------------------- #
 # 打印（唯一会出纸的接口）
 # --------------------------------------------------------------------------- #

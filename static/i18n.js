@@ -86,6 +86,10 @@ const I18N = {
     'btn.dry': '干跑（只存 PNG，不出纸）',
     'btn.printing': '打印中…',
     'btn.drying': '生成中…',
+    'btn.backfeed': '回退一张纸',
+    'btn.backfeeding': '回退中…',
+    'backfeed.hint': '装纸后多走出来的那张空白，点这里收回去，下一张就印在它上面。退多少按「标签纸」的高度算。',
+    'backfeed.done': (mm) => `已回退 ${mm} mm（一张标签加间隙）`,
 
     'ocr.working': '识别中…（首次运行需要下载一次 OCR 模型，可能要等十几秒）',
     'txt.working': '解析中…',
@@ -198,6 +202,10 @@ const I18N = {
     'btn.dry': 'Dry run (save PNG only)',
     'btn.printing': 'Printing…',
     'btn.drying': 'Generating…',
+    'btn.backfeed': 'Back-feed one label',
+    'btn.backfeeding': 'Back-feeding…',
+    'backfeed.hint': 'Pulls back the blank label the printer feeds out after you load paper, so the next print lands on it. Distance follows the Label stock height.',
+    'backfeed.done': (mm) => `Backed up ${mm} mm (one label plus gap)`,
 
     'ocr.working': 'Recognizing… (the first run downloads the OCR model once, may take ~15s)',
     'txt.working': 'Parsing…',

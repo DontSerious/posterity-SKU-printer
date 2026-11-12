@@ -698,6 +698,33 @@ async function submitPrint(dryRun) {
   }
 }
 
+// 回退一张纸：装纸后机器会多走一张空白去找间隙，收回来下一张就印在它上面。
+// 不出纸，所以不弹确认框。
+async function submitBackfeed() {
+  const btn = $('backfeed');
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t('btn.backfeeding');
+  const el = $('printResult');
+  try {
+    const res = await fetch('/api/backfeed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ printer: $('printer').value, paper: paperSpec() }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    el.className = 'result ok';
+    el.textContent = t('backfeed.done', data.mm);
+  } catch (e) {
+    el.className = 'result err';
+    el.textContent = String(e.message || e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
 // --------------------------------------------------------------------------- //
 // 事件绑定
 // --------------------------------------------------------------------------- //
@@ -776,6 +803,7 @@ function bind() {
 
   $('print').addEventListener('click', () => submitPrint(false));
   $('dry').addEventListener('click', () => submitPrint(true));
+  $('backfeed').addEventListener('click', submitBackfeed);
 
   // 打印文件页签
   const dropF = $('dropFile');

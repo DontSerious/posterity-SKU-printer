@@ -41,7 +41,7 @@ _SETUP = (
     "SPEED 5.00",
     "DENSITY 10",
     "OFFSET 0.00 mm",
-    "GAP 3.48 mm,0.0 mm",
+    "GAP 3.48 mm,0.0 mm",  # 改这里要连 GAP_MM 一起改
 )
 
 # 驱动把一张图切成多条 BITMAP：90×50（每行 90 字节、400 行）切成 280 + 120 行。
@@ -172,12 +172,39 @@ def encode_job(pages: list[tuple[Image.Image, int]], width_mm: float, height_mm:
     return bytes(out)
 
 
+# 纸间隙，和 _SETUP 里的 GAP 同一个数。回退一张 = 标签高 + 间隙。
+GAP_MM = 3.48
+
+
+def encode_backfeed(width_mm: float, height_mm: float) -> tuple[bytes, int]:
+    """往回退一张纸（标签高 + 间隙）的 TSPL 字节，和退了多少点。纯函数。
+
+    给装纸用的：合上打印头后机器会走一张空白标签去找间隙，那张就挂在撕纸口外面
+    白白浪费。退回一个标签间距，它回到打印头下面，下一次打印就印在它上面。
+    先发 SIZE / GAP，打印机才知道这一卷的间距；BACKFEED 的单位是点（203dpi）。
+    """
+    dots = int(round((height_mm + GAP_MM) / 25.4 * DPI))
+    lines = list(_SETUP) + [f"SIZE {width_mm:.1f} mm,{height_mm:.1f} mm", f"BACKFEED {dots}"]
+    return "".join(line + "\r\n" for line in lines).encode("ascii"), dots
+
+
+def backfeed(printer: str, width_mm: float, height_mm: float) -> int:
+    """回退一张纸，返回退了多少点。"""
+    data, dots = encode_backfeed(width_mm, height_mm)
+    _write(printer, data)
+    return dots
+
+
 def send(printer: str, pages: list[tuple[Image.Image, int]], width_mm: float, height_mm: float) -> int:
     """编码并写进设备，返回出了几张。写不进去就抛 OSError / RuntimeError，由调用方报给用户。"""
+    _write(printer, encode_job(pages, width_mm, height_mm))
+    return sum(max(1, int(c)) for _, c in pages)
+
+
+def _write(printer: str, data: bytes) -> None:
     dev = _device_of(printer)
     if not dev:
         raise RuntimeError(f"找不到打印机 {printer}（/dev/usb/lp* 里没有它，USB 线插好了吗）")
-    data = encode_job(pages, width_mm, height_mm)
     with _lock:
         try:
             fd = os.open(dev, os.O_WRONLY)
@@ -189,4 +216,3 @@ def send(printer: str, pages: list[tuple[Image.Image, int]], width_mm: float, he
                 view = view[os.write(fd, view):]
         finally:
             os.close(fd)
-    return sum(max(1, int(c)) for _, c in pages)
