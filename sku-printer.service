@@ -1,0 +1,31 @@
+# SKU barcode printer on the gateway (Debian, tomatoServer). CT-428D on USB -> /dev/usb/lp0.
+#
+#   sudo cp sku-printer.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now sku-printer
+#   systemctl status sku-printer ; journalctl -u sku-printer -f
+#
+# Not User=root, same reasons as webflash.service next door: uv and its cache live
+# in tomato's home, and root would build a second environment. The printer node is
+# root:lp 0660, so the lp group comes in through SupplementaryGroups instead of
+# adding tomato to lp (that would need a re-login to take effect).
+#
+# No --reload: production runs from this git checkout, and a checkout/merge that
+# leaves a conflict marker would crash-loop it. Restart explicitly after pulling.
+[Unit]
+Description=SKU barcode printer (Flask on :5000, ERP print bridge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tomato
+SupplementaryGroups=lp
+WorkingDirectory=/home/tomato/sku-barcode-printer
+Environment=PATH=/home/tomato/.local/bin:/usr/local/bin:/usr/bin:/bin
+# print() goes to the journal; unbuffered or the [erp-bridge] lines show up minutes late
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/tomato/.local/bin/uv run --frozen python app.py --lan --no-browser
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

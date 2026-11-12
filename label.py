@@ -31,9 +31,12 @@ _FONT_CANDIDATES = [
     r"C:\Windows\Fonts\consolab.ttf",  # Consolas Bold：等宽 + 粗，热敏印出来最清晰
     r"C:\Windows\Fonts\arialbd.ttf",
     r"C:\Windows\Fonts\segoeuib.ttf",
+    # Linux（gw）上没有上面三个。等宽 + 粗、免费、最接近 Consolas Bold 的是这个
+    # （Debian 包 fonts-dejavu-core）。字形比 Consolas 宽，同一个 SKU 字号会小一点。
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
 ]
 
-# 上面三个字体一个中文字形都没有，PIL 会把每个汉字画成该字体的 .notdef
+# 上面几个字体一个中文字形都没有，PIL 会把每个汉字画成该字体的 .notdef
 # （Consolas 下是个 "▯?" 方框，实测「中文标签」出四个方框）。含中文/日文的
 # 标签往后落到这一组：203dpi 热敏上笔画粗细均匀的黑体最清晰，微软雅黑次之，
 # 宋体笔画细、小字号会糊成一团，只做兜底。
@@ -43,6 +46,7 @@ _CJK_FONT_CANDIDATES = [
     r"C:\Windows\Fonts\msyh.ttc",     # 微软雅黑
     r"C:\Windows\Fonts\Deng.ttf",     # 等线
     r"C:\Windows\Fonts\simsun.ttc",   # 宋体
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",  # 文泉驿正黑（Linux，fonts-wqy-zenhei）
 ]
 
 _ALL_FONTS = _FONT_CANDIDATES + _CJK_FONT_CANDIDATES

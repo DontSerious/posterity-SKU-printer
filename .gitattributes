@@ -3,3 +3,6 @@
 # Windows 脚本必须是 CRLF，否则 cmd / PowerShell 解析会出问题
 *.bat text eol=crlf
 *.ps1 text eol=crlf
+
+# 驱动截获的原始 TSPL 字节（含 \r\n），逐字节对照用，一个字节都不许被换
+checks/fixtures/* binary

@@ -1,21 +1,32 @@
-"""打印机枚举与 GDI 打印。
+"""打印机枚举与打印。
 
-只有 print_labels() 会真正出纸；其余函数都是只读查询。
+只有 print_labels() / print_images() 会真正出纸；其余函数都是只读查询。
+
+两个后端，按平台选，对外接口相同：
+- Windows：GDI + 厂商驱动（本文件里的 win32 代码）。
+- 其余（gw 那台 Debian）：printing_tspl.py，把同一张位图包成 TSPL 直写 /dev/usb/lpN。
+  每个公开函数开头那句 `if not WINDOWS` 就是分岔点，Windows 那条路一行没动。
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 
-from PIL import ImageWin
-
-import win32con
-import win32gui
-import win32print
-import win32ui
-
 from label import Layout, render_label
+
+WINDOWS = sys.platform == "win32"
+
+if WINDOWS:
+    from PIL import ImageWin
+
+    import win32con
+    import win32gui
+    import win32print
+    import win32ui
+else:
+    import printing_tspl as _tspl
 
 DMPAPER_USER = 256
 
@@ -34,6 +45,8 @@ class PaperSpec:
 # --------------------------------------------------------------------------- #
 
 def list_printers() -> list[dict]:
+    if not WINDOWS:
+        return _tspl.list_printers()
     flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
     default = get_default_printer()
     out = []
@@ -52,6 +65,8 @@ def list_printers() -> list[dict]:
 
 
 def get_default_printer() -> str:
+    if not WINDOWS:
+        return _tspl.get_default_printer()
     try:
         return win32print.GetDefaultPrinter()
     except Exception:
@@ -60,6 +75,8 @@ def get_default_printer() -> str:
 
 def list_papers(printer: str) -> list[dict]:
     """从驱动读该打印机支持的纸张（名称 / DMPAPER id / 尺寸）。"""
+    if not WINDOWS:
+        return _tspl.list_papers(printer)
     port = _port_of(printer)
     try:
         names = win32print.DeviceCapabilities(printer, port, win32con.DC_PAPERNAMES)
@@ -91,6 +108,8 @@ def list_papers(printer: str) -> list[dict]:
 
 def printer_resolution(printer: str) -> dict:
     """返回打印机 dpi 与可打印区域点数，用于诊断。"""
+    if not WINDOWS:
+        return _tspl.printer_resolution(printer)
     try:
         hdc = win32gui.CreateDC("WINSPOOL", printer, None)
         dc = win32ui.CreateDCFromHandle(hdc)
@@ -160,6 +179,16 @@ def print_labels(
     if not jobs:
         return {"ok": False, "error": "没有可打印的行", "printed": 0}
 
+    if not WINDOWS:
+        w_px, h_px = _tspl.canvas_px(paper.width_mm, paper.height_mm)
+        pages = [
+            (render_label(sku, paper.width_mm, paper.height_mm, layout, canvas_px=(w_px, h_px)), qty)
+            for sku, qty in jobs
+        ]
+        printed = _tspl.send(printer, pages, paper.width_mm, paper.height_mm)
+        return {"ok": True, "printed": printed, "canvas_px": [w_px, h_px],
+                "skus": [s for s, _ in jobs]}
+
     dc = _make_dc(printer, paper)
     try:
         w_px = dc.GetDeviceCaps(win32con.HORZRES)
@@ -227,6 +256,13 @@ def print_images(
     """
     if not images:
         return {"ok": False, "error": "没有可打印的页面", "printed": 0}
+
+    if not WINDOWS:
+        w_px, h_px = _tspl.canvas_px(paper.width_mm, paper.height_mm)
+        n = max(1, int(copies))
+        pages = [(fit_to_canvas(img, w_px, h_px), n) for img in images]
+        printed = _tspl.send(printer, pages, paper.width_mm, paper.height_mm)
+        return {"ok": True, "printed": printed, "canvas_px": [w_px, h_px]}
 
     dc = _make_dc(printer, paper)
     try:

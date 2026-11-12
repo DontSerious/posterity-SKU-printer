@@ -2,6 +2,11 @@
 
 订单表格截图 → OCR 识别 SKU 和数量 → 人工核对 → 打印 Code128 标签到 **CTPrinter CT-428D**。
 
+> **2026-11-11 起打印机接在 gw（`tomatoServer`，Debian）上，生产服务跑在那台**：
+> <http://192.168.5.9:5000>，systemd 服务 `sku-printer`。怎么部署、怎么重启见下面
+> 「在 gw（Linux）上跑」。office 那台 Windows 上的计划任务已停用，下面 Windows 的
+> 用法照旧可用，只是那台已经没有打印机了。
+
 ## 使用
 
 双击 **`run.bat`**（首次会自动 `uv sync` 装依赖），浏览器打开 <http://127.0.0.1:5000>。
@@ -121,6 +126,32 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 >
 > 这两个 .ps1 是 **UTF-8 with BOM** 编码 —— Windows PowerShell 5.1 读脚本默认按 ANSI 解码，没 BOM 的话里面的中文会让脚本语法报错。编辑时注意别把 BOM 弄丢。
 
+## 在 gw（Linux）上跑
+
+gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203dpi 位图包成 TSPL2
+命令直接写 `/dev/usb/lp0`（内核 `usblp` 自动认，打印机自报 `CMD:TSPL2`）。命令头
+（`GAP 3.48 mm`、`DENSITY 10`、`DIRECTION 1,0` 等）是从 Windows 驱动的真实输出照抄的，
+所以出纸和以前一样；来由在该文件头注释，`uv run python checks/tspl_capture.py`
+拿截获的驱动输出逐字节对照。
+
+| 项 | 值 |
+|---|---|
+| 目录 | `/home/tomato/sku-barcode-printer`（git 工作目录，`config.json` / `learned.json` 从 office 拷来） |
+| 服务 | `sku-printer.service`（本仓根目录那份，装在 `/etc/systemd/system/`），监听 `0.0.0.0:5000` |
+| 重启 | `sudo systemctl restart sku-printer`（**没开 reloader**，`git pull` 之后要手动重启） |
+| 日志 | `journalctl -u sku-printer -f`（不写 `logs/service.log`） |
+| 权限 | 设备是 `root:lp 0660`，服务靠 unit 里的 `SupplementaryGroups=lp` 拿写权限 |
+| 字体 | `fonts-dejavu-core`（SKU 文字，替 Consolas Bold）、`fonts-wqy-zenhei`（中文，替黑体） |
+
+和 Windows 的差别：
+
+- 打印机列表只列 `/dev/usb/lp*` 里说 TSPL 的设备，名字拼成「厂商 型号」=
+  `CTPrinter CT-428D`，和 Windows 的队列名相同，配置与 ERP 记住的打印机名都不用改。
+- 没有驱动预设纸张，纸张下拉只剩快捷尺寸和自定义。
+- SKU 文字换成 DejaVu Sans Mono Bold，字比 Consolas 宽，同一个 SKU 字号会小一点；条码不受影响。
+- 没有 spooler：打印出错直接报在页面上，不会有"作业卡在队列里"这回事。
+- `.bat` / `.ps1` 在这台用不上。
+
 ## 默认设置
 
 | 项 | 值 |
@@ -150,7 +181,10 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 | `ocr.py` | 图片走 RapidOCR → 按 y 聚类还原表格行；文本走 `parse_text()` 逐行拆词。两条路共用同一套 SKU 归一化与易混字纠正。**无状态** —— 字典通过 `lookup=` 注入 |
 | `learned.py` | 从人工修正里学到的字典 / 映射 / 黑名单，见下节 |
 | `label.py` | 按 203dpi 出 1:1 像素位图，条码模块按**整数像素**逐条画，不让驱动缩放 |
-| `printing.py` | 枚举打印机与驱动纸张、DEVMODE 设自定义尺寸、GDI 逐页打印 |
+| `printing.py` | 枚举打印机与驱动纸张、DEVMODE 设自定义尺寸、GDI 逐页打印；非 Windows 时转给下一行 |
+| `printing_tspl.py` | Linux 后端：发现 `/dev/usb/lp*` 上的 TSPL 打印机，位图包成 TSPL 直写 |
+| `checks/tspl_capture.py` | 拿 `checks/fixtures/` 里截获的 Windows 驱动输出，逐字节验 TSPL 编码（自带对照） |
+| `sku-printer.service` | gw 上的 systemd unit |
 | `config.json` | 记住上次的打印机 / 纸张 / 版式，每次打印后自动更新。**不进 git**（含 ERP 打印桥的 token）—— 新机器上从 `config.example.json` 复制一份；不复制也能跑，代码里有同样的默认值 |
 | `learned.json` | 学到的东西落盘在这里。不进 git（是客户 SKU 清单），删了就从头学 |
 

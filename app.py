@@ -566,7 +566,8 @@ if __name__ == "__main__":
         # Win32 259），纸不出。它们本来也是每次现读现用的，重启没有意义。
         extra_files = [
             os.path.join(BASE_DIR, f)
-            for f in ("app.py", "ocr.py", "label.py", "printing.py", "learned.py")
+            for f in ("app.py", "ocr.py", "label.py", "printing.py", "printing_tspl.py",
+                      "learned.py")
         ]
 
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):
