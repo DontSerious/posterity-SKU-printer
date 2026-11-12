@@ -142,6 +142,13 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 | 日志 | `journalctl -u sku-printer -f`（不写 `logs/service.log`） |
 | 权限 | 设备是 `root:lp 0660`，服务靠 unit 里的 `SupplementaryGroups=lp` 拿写权限 |
 | 字体 | `fonts-dejavu-core`（SKU 文字，替 Consolas Bold）、`fonts-wqy-zenhei`（中文，替黑体） |
+| A4 打印机 | EPSON L1350（无线，192.168.5.15），CUPS 队列 `EPSON-L1350`，IPP Everywhere 免驱动（`lpadmin -m everywhere`；Debian 的 ESC/P-R 驱动里没有这个型号）。`printing_cups.py` |
+
+**A4 打印机（2026-11-11 起）**：打印机下拉里 CUPS 队列排在标签机后面，默认打印机永远是标签机。
+- SKU 标签选它：一张标签一页 A4、按标签实际尺寸居中（同一张 203dpi 图贴在 A4 上存成 PDF）。
+- 「打印文件」选它：原文件交给 CUPS，按文件自身尺寸印在 A4 上；页签里的「纸张」只管标签机。
+- ERP 打印桥**不报**它（`kind=office`），ERP 那边只能选标签机。
+- 「回退一张纸」对它报错（只对标签机有用）。
 
 和 Windows 的差别：
 

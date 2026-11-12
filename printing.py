@@ -14,7 +14,8 @@ import os
 import sys
 from dataclasses import dataclass
 
-from label import Layout, render_label
+from label import DPI as LABEL_DPI
+from label import Layout, mm_to_px, render_label
 
 WINDOWS = sys.platform == "win32"
 
@@ -26,9 +27,17 @@ if WINDOWS:
     import win32print
     import win32ui
 else:
+    import printing_cups as _cups
     import printing_tspl as _tspl
 
 DMPAPER_USER = 256
+
+# 非 Windows 上每台打印机带一个 kind：label = 标签机（TSPL 直写），office = A4 普通打印机
+# （CUPS 队列）。ERP 打印桥只上报 label（用户 2026-11-11 定），见 erp_bridge.py。
+
+
+def _is_cups(printer: str) -> bool:
+    return not WINDOWS and _cups.is_queue(printer)
 
 
 @dataclass
@@ -46,7 +55,10 @@ class PaperSpec:
 
 def list_printers() -> list[dict]:
     if not WINDOWS:
-        return _tspl.list_printers()
+        # 标签机在前：第一台就是默认打印机，不能让 A4 那台抢了默认
+        labels = [dict(p, kind="label") for p in _tspl.list_printers()]
+        office = [dict(q, kind="office", is_default=False) for q in _cups.queues()]
+        return labels + office
     flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
     default = get_default_printer()
     out = []
@@ -108,6 +120,8 @@ def list_papers(printer: str) -> list[dict]:
 
 def printer_resolution(printer: str) -> dict:
     """返回打印机 dpi 与可打印区域点数，用于诊断。"""
+    if _is_cups(printer):
+        return {}  # A4 打印机没有"纸比打印头宽"这回事，前端拿不到 horz_res 就不警告
     if not WINDOWS:
         return _tspl.printer_resolution(printer)
     try:
@@ -180,12 +194,19 @@ def print_labels(
         return {"ok": False, "error": "没有可打印的行", "printed": 0}
 
     if not WINDOWS:
-        w_px, h_px = _tspl.canvas_px(paper.width_mm, paper.height_mm)
+        cups = _is_cups(printer)
+        if cups:  # A4 打印机：标签按 203dpi 出图、按实际尺寸印，不受标签机打印头宽度限制
+            w_px, h_px = mm_to_px(paper.width_mm), mm_to_px(paper.height_mm)
+        else:
+            w_px, h_px = _tspl.canvas_px(paper.width_mm, paper.height_mm)
         pages = [
             (render_label(sku, paper.width_mm, paper.height_mm, layout, canvas_px=(w_px, h_px)), qty)
             for sku, qty in jobs
         ]
-        printed = _tspl.send(printer, pages, paper.width_mm, paper.height_mm)
+        if cups:
+            printed = _cups.print_images(printer, pages, LABEL_DPI, job_name)
+        else:
+            printed = _tspl.send(printer, pages, paper.width_mm, paper.height_mm)
         return {"ok": True, "printed": printed, "canvas_px": [w_px, h_px],
                 "skus": [s for s, _ in jobs]}
 
@@ -257,6 +278,9 @@ def print_images(
     if not images:
         return {"ok": False, "error": "没有可打印的页面", "printed": 0}
 
+    if _is_cups(printer):
+        # A4 打印机该拿原文件（print_file），不该拿缩到标签纸上的栅格图
+        raise RuntimeError(f"{printer} 是普通打印机，文件要原样交给它（print_file）")
     if not WINDOWS:
         w_px, h_px = _tspl.canvas_px(paper.width_mm, paper.height_mm)
         n = max(1, int(copies))
@@ -287,6 +311,20 @@ def print_images(
     return {"ok": True, "printed": printed, "canvas_px": [w_px, h_px]}
 
 
+def is_office_printer(printer: str) -> bool:
+    """A4 普通打印机（CUPS 队列）？是的话「打印文件」走 print_file，把原文件交给它。"""
+    return _is_cups(printer)
+
+
+def print_file(printer: str, data: bytes, filename: str, copies: int = 1,
+               job_name: str = "Label file") -> dict:
+    """上传的 PDF / 图片原样交给 A4 打印机，纸张用打印机默认（A4）。"""
+    if not _is_cups(printer):
+        raise RuntimeError(f"{printer} 不是 CUPS 队列")
+    receipt = _cups.print_file(printer, data, filename, copies, job_name)
+    return {"ok": True, "receipt": receipt, "copies": max(1, int(copies))}
+
+
 def backfeed(printer: str, paper: PaperSpec) -> dict:
     """往回退一张纸（标签高 + 间隙），收回装纸时多走出去的那张空白。不出纸。
 
@@ -294,6 +332,8 @@ def backfeed(printer: str, paper: PaperSpec) -> dict:
     """
     if WINDOWS:
         raise RuntimeError("回退纸只在 gw（Linux，TSPL 直写）上支持")
+    if _is_cups(printer):
+        raise RuntimeError(f"{printer} 是普通打印机，回退纸只对标签机有用")
     dots = _tspl.backfeed(printer, paper.width_mm, paper.height_mm)
     return {"ok": True, "dots": dots, "mm": round(dots / _tspl.DPI * 25.4, 1)}
 

@@ -80,8 +80,11 @@ def _loop(cfg_loader):
             base = str(erp["url"]).rstrip("/")
             token = str(erp["token"])
             try:
+                # 只报标签机：gw 上的 A4 打印机（kind=office）只给面板网页用，
+                # ERP 那边看不到它（用户 2026-11-11 定）。Windows 上的条目没有 kind。
                 printers = [{"name": p["name"], "is_default": p["is_default"]}
-                            for p in printing.list_printers()]
+                            for p in printing.list_printers()
+                            if p.get("kind", "label") == "label"]
             except Exception:  # noqa: BLE001
                 printers = []
             r = _post(f"{base}/api/print-bridge/poll", token,

@@ -18,6 +18,8 @@ const I18N = {
     'file.reading': '读取中…',
     'file.info': (name, n, w, h) => `${name} —— ${n} 页 · ${w} × ${h} mm（取自 PDF）`,
     'file.infoimg': (name) => `${name} —— 图片 1 页，按右下角当前纸张尺寸打印`,
+    'file.confirmA4': (name, pages, copies, total, printer) =>
+      `即将打印文件：\n\n${name}\n${pages} 页 × ${copies} 份 = ${total} 页\n打印机：${printer}\n纸张：A4（按文件自身的尺寸印，不缩放）\n\n确定开始打印？`,
     'file.confirm': (name, pages, copies, total, printer, w, h) =>
       `即将打印文件：\n\n${name}\n${pages} 页 × ${copies} 份 = ${total} 张\n打印机：${printer}\n纸张：${w} × ${h} mm\n\n确定开始打印？`,
 
@@ -105,6 +107,7 @@ const I18N = {
     'confirm': (n, t, printer, w, h, list) =>
       `即将打印：\n\n共 ${n} 个 SKU，合计 ${t} 张标签\n打印机：${printer}\n纸张：${w} × ${h} mm\n\n${list}\n\n确定开始打印？`,
     'print.done': (n, printer) => `已提交 ${n} 张标签到 ${printer}`,
+    'print.doneA4': (n, printer) => `已提交 ${n} 页到 ${printer}`,
     'dry.done': (n, t, files) => `已生成 ${n} 个 PNG（合计 ${t} 张）：\n${files}`,
 
     'bar.info': (m, px, bw, mg) => `${m} 模块 × ${px}px = 条码宽 ${bw}mm，实际边距 ${mg}mm`,
@@ -136,6 +139,8 @@ const I18N = {
     'file.infoimg': (name) => `${name} — single image, printed at the current paper size (bottom right)`,
     'file.confirm': (name, pages, copies, total, printer, w, h) =>
       `About to print a file:\n\n${name}\n${pages} pages × ${copies} copies = ${total} labels\nPrinter: ${printer}\nStock: ${w} × ${h} mm\n\nStart printing?`,
+    'file.confirmA4': (name, pages, copies, total, printer) =>
+      `About to print a file:\n\n${name}\n${pages} pages × ${copies} copies = ${total} pages\nPrinter: ${printer}\nPaper: A4 (printed at the file's own size, no scaling)\n\nStart printing?`,
 
     'drop.big': 'Drop the order table screenshot here',
     'drop.hint': 'or <b>click to pick a file</b>, or just press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste',
@@ -221,6 +226,7 @@ const I18N = {
     'confirm': (n, t, printer, w, h, list) =>
       `About to print:\n\n${n} SKUs, ${t} labels total\nPrinter: ${printer}\nStock: ${w} × ${h} mm\n\n${list}\n\nStart printing?`,
     'print.done': (n, printer) => `Sent ${n} labels to ${printer}`,
+    'print.doneA4': (n, printer) => `Sent ${n} pages to ${printer}`,
     'dry.done': (n, t, files) => `Generated ${n} PNGs (${t} labels total):\n${files}`,
 
     'bar.info': (m, px, bw, mg) => `${m} modules × ${px}px = ${bw}mm wide, ${mg}mm actual margin`,

@@ -386,17 +386,29 @@ function syncFilePaperUi() {
   } catch (e) { /* 隐私模式等情况下 localStorage 不可用 */ }
 }
 
+// 选中的是 A4 普通打印机（gw 上 CUPS 里的 EPSON）？服务端给每台打印机标了 kind。
+// 是的话「打印文件」把原文件交给它、用 A4，页签里的「纸张」不起作用。
+function isOfficePrinter() {
+  const p = printerList.find((x) => x.name === $('printer').value);
+  return !!(p && p.kind === 'office');
+}
+
 async function submitFilePrint(dryRun) {
   if (!pickedFile) return;
   const copies = Math.max(1, parseInt($('fileCopies').value || '1', 10));
   const pages = pickedInfo ? pickedInfo.pages : 1;
+  const office = !dryRun && isOfficePrinter();
+  if (office) {
+    if (!confirm(t('file.confirmA4', pickedFile.name, pages, copies, pages * copies,
+                   $('printer').value))) return;
+  }
   const p = filePaperSpec();
   const fromPdf = !p && pickedInfo && pickedInfo.width_mm;
   // 图片没有自带尺寸，选「取自 PDF」时退到底部打印设置的纸张
   const fallback = p || paperSpec();
   const wmm = fromPdf ? pickedInfo.width_mm : fallback.width_mm;
   const hmm = fromPdf ? pickedInfo.height_mm : fallback.height_mm;
-  if (!dryRun &&
+  if (!dryRun && !office &&
       !confirm(t('file.confirm', pickedFile.name, pages, copies, pages * copies,
                  $('printer').value, wmm, hmm))) return;
 
@@ -419,7 +431,9 @@ async function submitFilePrint(dryRun) {
     el.className = 'result ok';
     el.textContent = dryRun
       ? t('dry.done', data.files.length, data.total_labels, data.files.join('\n'))
-      : t('print.done', data.printed, $('printer').value);
+      : office
+        ? t('print.doneA4', pages * copies, $('printer').value)
+        : t('print.done', data.printed, $('printer').value);
   } catch (e) {
     el.className = 'result err';
     el.textContent = String(e.message || e);

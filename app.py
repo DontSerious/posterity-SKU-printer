@@ -329,9 +329,21 @@ def api_print_file():
     copies = max(1, int(request.form.get("copies", 1) or 1))
     dry_run = request.form.get("dry_run") == "1"
     use_paper = request.form.get("use_paper") == "1"
+    data = f.read()
+
+    # A4 普通打印机（gw 上的 EPSON，CUPS 队列）：原文件直接交给它，按文件自身尺寸印在
+    # 打印机的 A4 上，不走下面"栅格化再缩到标签纸上"那条路 —— 页签里的「纸张」只管标签机。
+    printer = request.form.get("printer") or ""
+    if not dry_run and printer and printing.is_office_printer(printer):
+        try:
+            res = printing.print_file(printer, data, f.filename or "file.pdf", copies,
+                                      job_name=f.filename or "Label file")
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"ok": False, "error": f"打印失败: {exc}"}), 500
+        return jsonify(res)
 
     try:
-        pages, w_mm, h_mm = _pages_from_upload(f.read(), f.filename, dpi=300)
+        pages, w_mm, h_mm = _pages_from_upload(data, f.filename, dpi=300)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": f"读取文件失败: {exc}"}), 400
 
