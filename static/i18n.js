@@ -37,14 +37,16 @@ const I18N = {
     'db.autoadded': (n, list) => `${n} 个新 SKU 已自动收进 SKU 库：${list}`,
 
     'file.big': '把标签 PDF / 图片拖到这里',
-    'file.hint': '比如 ERP 导出的二维码标签 PDF —— 纸张默认「取自 PDF」页面尺寸，每页出一张标签；也可以在下面选实际装的纸，页面会等比缩放居中。方向不对会自动旋转。',
+    'file.hint': '比如 ERP 导出的二维码标签 PDF —— 每页出一张标签，打在下面「打印设置」选的标签纸上；页面尺寸不同会等比缩放居中，方向不对自动旋转。',
     'file.copies': '每页份数',
-    'file.paper': '纸张',
-    'file.paper.pdf': '取自 PDF',
-    'file.paper.custom': '自定义…',
+    'file.where': '纸张用下面「打印设置」的「标签纸」，打印按钮也在下面',
     'file.reading': '读取中…',
-    'file.info': (name, n, w, h) => `${name} —— ${n} 页 · ${w} × ${h} mm（取自 PDF）`,
-    'file.infoimg': (name) => `${name} —— 图片 1 页，按右下角当前纸张尺寸打印`,
+    'file.info': (name, n, w, h) => `${name} —— ${n} 页 · PDF 页面 ${w} × ${h} mm`,
+    'file.infoimg': (name) => `${name} —— 图片 1 页`,
+    'file.fit': (pw, ph, w, h) => `PDF 页面 ${pw} × ${ph} mm，标签纸 ${w} × ${h} mm：等比缩放居中，方向不对自动旋转`,
+    'file.fitSame': (w, h) => `PDF 页面和标签纸都是 ${w} × ${h} mm`,
+    'file.fitImg': (w, h) => `图片打在 ${w} × ${h} mm 标签纸上，等比缩放居中`,
+    'file.fitA4': 'A4 打印机：原文件交给它，按文件自身尺寸印在 A4 上，标签纸设置不起作用',
     'file.confirmA4': (name, pages, copies, total, printer) =>
       `即将打印文件：\n\n${name}\n${pages} 页 × ${copies} 份 = ${total} 页\n打印机：${printer}\n纸张：A4（按文件自身的尺寸印，不缩放）\n\n确定开始打印？`,
     'file.confirm': (name, pages, copies, total, printer, w, h) =>
@@ -131,6 +133,8 @@ const I18N = {
     'txt.skipped': (n, b, lines) => `解析出 ${n} 行；有 ${b} 行没认出 SKU，已跳过：\n${lines}`,
 
     'sum.count': (n, t) => `共 ${n} 个 SKU / 合计 ${t} 张标签`,
+    'sum.file': (name, pages, copies, total) => `打印文件 ${name}：${pages} 页 × ${copies} 份 = ${total} 张`,
+    'sum.nofile': '「打印文件」页签里还没有文件 —— 先把 PDF / 图片拖进去',
     'confirm': (n, t, printer, w, h, list) =>
       `即将打印：\n\n共 ${n} 个 SKU，合计 ${t} 张标签\n打印机：${printer}\n纸张：${w} × ${h} mm\n\n${list}\n\n确定开始打印？`,
     'print.done': (n, printer) => `已提交 ${n} 张标签到 ${printer}`,
@@ -183,14 +187,16 @@ const I18N = {
     'db.autoadded': (n, list) => `${n} new SKU(s) added to the library automatically: ${list}`,
 
     'file.big': 'Drop a label PDF / image here',
-    'file.hint': 'e.g. the QR-label PDF exported from the ERP — paper defaults to "From PDF" (the page size itself, one label per page); or pick the stock you actually loaded below and each page is scaled to fit, centred. Wrong orientation is auto-rotated.',
+    'file.hint': 'e.g. the QR-label PDF exported from the ERP — one label per page, printed on the Label stock chosen in Print settings below; a different page size is scaled to fit and centred, wrong orientation is auto-rotated.',
     'file.copies': 'Copies per page',
-    'file.paper': 'Paper',
-    'file.paper.pdf': 'From PDF',
-    'file.paper.custom': 'Custom…',
+    'file.where': 'Paper comes from "Label stock" in Print settings below, and the print buttons are down there too',
     'file.reading': 'Reading…',
-    'file.info': (name, n, w, h) => `${name} — ${n} pages · ${w} × ${h} mm (from the PDF)`,
-    'file.infoimg': (name) => `${name} — single image, printed at the current paper size (bottom right)`,
+    'file.info': (name, n, w, h) => `${name} — ${n} pages · PDF page ${w} × ${h} mm`,
+    'file.infoimg': (name) => `${name} — single image`,
+    'file.fit': (pw, ph, w, h) => `PDF page ${pw} × ${ph} mm on ${w} × ${h} mm stock: scaled to fit and centred, auto-rotated if needed`,
+    'file.fitSame': (w, h) => `PDF page and label stock are both ${w} × ${h} mm`,
+    'file.fitImg': (w, h) => `Image printed on ${w} × ${h} mm stock, scaled to fit and centred`,
+    'file.fitA4': 'A4 printer: the file goes as-is, printed at its own size on A4; label stock does not apply',
     'file.confirm': (name, pages, copies, total, printer, w, h) =>
       `About to print a file:\n\n${name}\n${pages} pages × ${copies} copies = ${total} labels\nPrinter: ${printer}\nStock: ${w} × ${h} mm\n\nStart printing?`,
     'file.confirmA4': (name, pages, copies, total, printer) =>
@@ -277,6 +283,8 @@ const I18N = {
     'txt.skipped': (n, b, lines) => `Parsed ${n} rows; ${b} lines had no recognizable SKU and were skipped:\n${lines}`,
 
     'sum.count': (n, t) => `${n} SKUs / ${t} labels total`,
+    'sum.file': (name, pages, copies, total) => `Print file ${name}: ${pages} pages × ${copies} copies = ${total} labels`,
+    'sum.nofile': 'No file in the "Print a file" tab yet — drop a PDF / image there first',
     'confirm': (n, t, printer, w, h, list) =>
       `About to print:\n\n${n} SKUs, ${t} labels total\nPrinter: ${printer}\nStock: ${w} × ${h} mm\n\n${list}\n\nStart printing?`,
     'print.done': (n, printer) => `Sent ${n} labels to ${printer}`,

@@ -65,22 +65,8 @@
           <div class="filego">
             <label class="inline"><span data-i18n="file.copies">每页份数</span>
               <input type="number" id="fileCopies" min="1" max="50" value="1"></label>
-            <label class="inline"><span data-i18n="file.paper">纸张</span>
-              <select id="filePaper">
-                <option value="pdf" data-i18n="file.paper.pdf">取自 PDF</option>
-                <option value="60x30">60 × 30 mm</option>
-                <option value="90x50">90 × 50 mm</option>
-                <option value="100x100">100 × 100 mm</option>
-                <option value="100x150">100 × 150 mm</option>
-                <option value="custom" data-i18n="file.paper.custom">自定义…</option>
-              </select></label>
-            <label class="inline" id="filePaperCustom">
-              <input type="number" id="fileWmm" step="0.1" min="10" value="60"> ×
-              <input type="number" id="fileHmm" step="0.1" min="10" value="30"> mm</label>
-            <button id="filePrint" class="primary" data-i18n="btn.print">确定打印</button>
-            <button id="fileDry" class="secondary" data-i18n="btn.dry">干跑（只存 PNG，不出纸）</button>
+            <span class="hint" data-i18n="file.where">纸张用下面「打印设置」的「标签纸」，打印按钮也在下面</span>
           </div>
-          <p id="fileResult" class="result"></p>
         </div>
       </div>
 

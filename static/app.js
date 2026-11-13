@@ -80,7 +80,7 @@ function syncTextOnly() {
 }
 
 // 常用尺寸快捷项。驱动预设里没有这些，都走 DMPAPER_USER 自定义尺寸
-const QUICK_SIZES = [[60, 30], [90, 50], [100, 150]];
+const QUICK_SIZES = [[60, 30], [90, 50], [100, 100], [100, 150]];
 
 function paperSpec() {
   const sel = $('paper').value;
@@ -322,7 +322,15 @@ async function parseText() {
   }
 }
 
+// 当前页签。下方「打印设置 / 预览 / 打印」是共用的：在「打印文件」页签时打的是那份文件，
+// 其余页签打的是核对列表
+let activeTab = 'img';
+const fileMode = () => activeTab === 'file';
+
 function switchTab(name) {
+  activeTab = name;
+  refreshSummary();
+  refreshPreview();
   document.querySelectorAll('.tab').forEach((el) => el.classList.toggle('on', el.dataset.tab === name));
   $('paneImg').classList.toggle('hidden', name !== 'img');
   $('paneTxt').classList.toggle('hidden', name !== 'txt');
@@ -516,7 +524,7 @@ async function handleDocFile(f) {
   el.textContent = t('file.reading');
   $('dropFile').classList.add('hidden');
   $('fileReady').classList.remove('hidden');
-  $('fileResult').textContent = '';
+  $('printResult').textContent = '';
 
   const fd = new FormData();
   fd.append('file', f, f.name);
@@ -533,70 +541,63 @@ async function handleDocFile(f) {
     el.textContent = String(e.message || e);
     pickedFile = null;
   }
-}
-
-// 「打印文件」页签自己的纸张选择。返回 null 表示「取自 PDF」（沿用文件自身尺寸）。
-function filePaperSpec() {
-  const v = $('filePaper').value;
-  if (v === 'pdf') return null;
-  let w, h;
-  if (v === 'custom') {
-    w = parseFloat($('fileWmm').value);
-    h = parseFloat($('fileHmm').value);
-  } else {
-    [w, h] = v.split('x').map(parseFloat);
-  }
-  if (!(w >= 10) || !(h >= 10)) return null;
-  return { mode: 'custom', paper_id: 256, width_mm: w, height_mm: h };
-}
-
-function syncFilePaperUi() {
-  $('filePaperCustom').classList.toggle('hidden', $('filePaper').value !== 'custom');
-  try {
-    localStorage.setItem('filePaper', JSON.stringify({
-      sel: $('filePaper').value, w: $('fileWmm').value, h: $('fileHmm').value,
-    }));
-  } catch (e) { /* 隐私模式等情况下 localStorage 不可用 */ }
+  refreshSummary();
+  refreshPreview();
 }
 
 // 选中的是 A4 普通打印机（gw 上 CUPS 里的 EPSON）？服务端给每台打印机标了 kind。
-// 是的话「打印文件」把原文件交给它、用 A4，页签里的「纸张」不起作用。
+// 是的话「打印文件」把原文件交给它、用 A4，「标签纸」不起作用。
 function isOfficePrinter() {
   const p = printerList.find((x) => x.name === $('printer').value);
   return !!(p && p.kind === 'office');
 }
 
+function fileCopies() {
+  return Math.max(1, parseInt($('fileCopies').value || '1', 10));
+}
+
+// 文件会怎么落到纸上，一句话。下方预览底下和汇总里用
+function fileFitText() {
+  if (!pickedFile) return '';
+  if (isOfficePrinter()) return t('file.fitA4');
+  const p = paperSpec();
+  if (!pickedInfo || !pickedInfo.width_mm) return t('file.fitImg', p.width_mm, p.height_mm);
+  const same = (a, b) => Math.abs(a - b) < 0.6;
+  const w = pickedInfo.width_mm, h = pickedInfo.height_mm;
+  if ((same(w, p.width_mm) && same(h, p.height_mm)) || (same(w, p.height_mm) && same(h, p.width_mm))) {
+    return t('file.fitSame', p.width_mm, p.height_mm);
+  }
+  return t('file.fit', w, h, p.width_mm, p.height_mm);
+}
+
+// 纸张一律用下方「打印设置」的「标签纸」（use_paper=1）：机器里装着的就是那一种纸。
+// PDF 页面尺寸不同就等比缩放居中，方向不一致自动转 90°（服务端 printing 里做）。
 async function submitFilePrint(dryRun) {
   if (!pickedFile) return;
-  const copies = Math.max(1, parseInt($('fileCopies').value || '1', 10));
+  const copies = fileCopies();
   const pages = pickedInfo ? pickedInfo.pages : 1;
   const office = !dryRun && isOfficePrinter();
-  if (office) {
-    if (!confirm(t('file.confirmA4', pickedFile.name, pages, copies, pages * copies,
-                   $('printer').value))) return;
+  const p = paperSpec();
+  if (!dryRun) {
+    const ok = office
+      ? confirm(t('file.confirmA4', pickedFile.name, pages, copies, pages * copies, $('printer').value))
+      : confirm(t('file.confirm', pickedFile.name, pages, copies, pages * copies,
+                  $('printer').value, p.width_mm, p.height_mm));
+    if (!ok) return;
   }
-  const p = filePaperSpec();
-  const fromPdf = !p && pickedInfo && pickedInfo.width_mm;
-  // 图片没有自带尺寸，选「取自 PDF」时退到底部打印设置的纸张
-  const fallback = p || paperSpec();
-  const wmm = fromPdf ? pickedInfo.width_mm : fallback.width_mm;
-  const hmm = fromPdf ? pickedInfo.height_mm : fallback.height_mm;
-  if (!dryRun && !office &&
-      !confirm(t('file.confirm', pickedFile.name, pages, copies, pages * copies,
-                 $('printer').value, wmm, hmm))) return;
 
-  const btn = dryRun ? $('fileDry') : $('filePrint');
+  const btn = dryRun ? $('dry') : $('print');
   const old = btn.textContent;
   btn.disabled = true;
   btn.textContent = t(dryRun ? 'btn.drying' : 'btn.printing');
-  const el = $('fileResult');
+  const el = $('printResult');
   const fd = new FormData();
   fd.append('file', pickedFile, pickedFile.name);
   fd.append('printer', $('printer').value);
   fd.append('copies', String(copies));
   fd.append('dry_run', dryRun ? '1' : '0');
-  fd.append('paper', JSON.stringify(fallback));   // 图片一律用它；PDF 只在 use_paper 时用
-  fd.append('use_paper', p ? '1' : '0');
+  fd.append('paper', JSON.stringify(p));
+  fd.append('use_paper', '1');
   try {
     const res = await fetch('/api/print-file', { method: 'POST', body: fd });
     const data = await res.json();
@@ -613,6 +614,7 @@ async function submitFilePrint(dryRun) {
   } finally {
     btn.disabled = false;
     btn.textContent = old;
+    refreshSummary();
   }
 }
 
@@ -788,6 +790,16 @@ function esc(s) {
 }
 
 function refreshSummary() {
+  if (fileMode()) {
+    const pages = pickedInfo ? pickedInfo.pages : 1;
+    $('summary').textContent = pickedFile
+      ? [t('sum.file', pickedFile.name, pages, fileCopies(), pages * fileCopies()), fileFitText()].join('\n')
+      : t('sum.nofile');
+    $('print').disabled = !pickedFile;
+    $('dry').disabled = !pickedFile;
+    return;
+  }
+  $('dry').disabled = false;
   const sel = rows.filter((r) => r.selected && r.sku.trim());
   const total = sel.reduce((a, r) => a + (parseInt(r.qty, 10) || 0), 0);
   $('summary').textContent = t('sum.count', sel.length, total);
@@ -813,6 +825,14 @@ function overWideWarning() {
 }
 
 async function doPreview() {
+  // 「打印文件」页签：预览换成那份文件的第一页，底下写它怎么落到纸上
+  if (fileMode()) {
+    if (pickedInfo && pickedInfo.preview) $('preview').src = pickedInfo.preview;
+    else $('preview').removeAttribute('src');
+    $('binfo').textContent = [overWideWarning(), fileFitText()].filter(Boolean).join('\n');
+    refreshSummary();  // 纸张变了，汇总里那句也要跟着变
+    return;
+  }
   const r = rows[activeIndex];
   const sku = (r && r.sku ? r.sku : 'EU-PRO-01').trim();
   if (!sku) return;
@@ -1012,8 +1032,8 @@ function bind() {
   $('dbQuickAdd').addEventListener('click', quickAddDb);
   $('dbImport').addEventListener('click', importDb);
 
-  $('print').addEventListener('click', () => submitPrint(false));
-  $('dry').addEventListener('click', () => submitPrint(true));
+  $('print').addEventListener('click', () => (fileMode() ? submitFilePrint(false) : submitPrint(false)));
+  $('dry').addEventListener('click', () => (fileMode() ? submitFilePrint(true) : submitPrint(true)));
   $('backfeed').addEventListener('click', submitBackfeed);
 
   // 打印文件页签
@@ -1029,22 +1049,11 @@ function bind() {
     pickedFile = null; pickedInfo = null;
     $('fileReady').classList.add('hidden');
     $('dropFile').classList.remove('hidden');
+    refreshSummary();
+    refreshPreview();
   });
-  $('filePrint').addEventListener('click', () => submitFilePrint(false));
-  $('fileDry').addEventListener('click', () => submitFilePrint(true));
-  // 页签自己的纸张选择记在浏览器里：同一台机器通常固定装一种纸
-  try {
-    const saved = JSON.parse(localStorage.getItem('filePaper') || 'null');
-    if (saved && saved.sel) {
-      if ([...$('filePaper').options].some((o) => o.value === saved.sel)) $('filePaper').value = saved.sel;
-      if (saved.w) $('fileWmm').value = saved.w;
-      if (saved.h) $('fileHmm').value = saved.h;
-    }
-  } catch (e) { /* 隐私模式等情况下 localStorage 不可用，按默认「取自 PDF」 */ }
-  $('filePaper').addEventListener('change', syncFilePaperUi);
-  $('fileWmm').addEventListener('change', syncFilePaperUi);
-  $('fileHmm').addEventListener('change', syncFilePaperUi);
-  syncFilePaperUi();
+  // 换纸、换打印机（标签机 ↔ A4）都会走 onPaperChange → refreshPreview，文件模式下那里会重算汇总
+  $('fileCopies').addEventListener('input', refreshSummary);
 }
 
 init();

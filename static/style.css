@@ -176,7 +176,7 @@ input[type=range] { width: 100%; margin-top: 4px; }
 .preview { background: #d9dde2; border-radius: 6px; padding: 12px; text-align: center; min-height: 80px; }
 .preview img { max-width: 100%; background: #fff; border-radius: 4px; display: block; margin: 0 auto; }
 
-.action .summary { font-size: 13px; color: #47505b; margin: 10px 0; }
+.action .summary { font-size: 13px; color: #47505b; margin: 10px 0; white-space: pre-line; }
 button.primary, button.secondary {
   width: 100%; padding: 10px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer;
 }

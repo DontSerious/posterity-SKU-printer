@@ -319,9 +319,11 @@ def api_file_info():
 
 @app.post("/api/print-file")
 def api_print_file():
-    """打印上传的 PDF/图片。PDF 的纸张尺寸默认取自文件本身（ERP 的标签 PDF
-    每页就是一张标签的物理尺寸）；表单带 use_paper=1 时改用右侧的纸张设置，
-    页面等比缩放居中放上去；图片一律用纸张设置。"""
+    """打印上传的 PDF/图片。
+
+    页面一律带 use_paper=1：纸张用下方「打印设置」的「标签纸」（机器里装着的就是那一种），
+    PDF 页面尺寸不同就等比缩放居中。不带 use_paper 时 PDF 按自身页面尺寸打 —— 页面已经
+    不走这条，留着给直接调接口的人；图片一律用纸张设置。"""
     import printing
 
     f = request.files.get("file")
@@ -333,7 +335,7 @@ def api_print_file():
     data = f.read()
 
     # A4 普通打印机（gw 上的 EPSON，CUPS 队列）：原文件直接交给它，按文件自身尺寸印在
-    # 打印机的 A4 上，不走下面"栅格化再缩到标签纸上"那条路 —— 页签里的「纸张」只管标签机。
+    # 打印机的 A4 上，不走下面"栅格化再缩到标签纸上"那条路 —— 「标签纸」只管标签机。
     printer = request.form.get("printer") or ""
     if not dry_run and printer and printing.is_office_printer(printer):
         try:
@@ -352,9 +354,17 @@ def api_print_file():
         paper = printing.PaperSpec(width_mm=w_mm, height_mm=h_mm)
     else:
         try:
-            paper = _paper_from({"paper": json.loads(request.form.get("paper") or "{}")})
+            paper_in = json.loads(request.form.get("paper") or "{}")
         except (ValueError, TypeError):
-            paper = _paper_from({})
+            paper_in = {}
+        paper = _paper_from({"paper": paper_in})
+        if use_paper:
+            # 和 /api/print 一样记下这次的打印机和纸：两边用的是同一组设置，下次打开就是它
+            cfg = load_config()
+            cfg["printer"] = printer or cfg.get("printer", "")
+            cfg["paper"] = {"mode": paper_in.get("mode", "custom"), "paper_id": paper.paper_id,
+                            "width_mm": paper.width_mm, "height_mm": paper.height_mm}
+            save_config(cfg)
 
     try:
         if dry_run:
