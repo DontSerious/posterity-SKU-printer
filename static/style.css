@@ -101,14 +101,16 @@ th {
   position: sticky; top: 0; z-index: 1; box-shadow: inset 0 -1px 0 #e2e6ea;
 }
 .c-chk { width: 34px; }
-.c-sku { width: 180px; }
+/* SKU 不设宽度，吃掉剩下的全部；描述只作参考，压窄、放在最后 */
 .c-qty { width: 76px; }
+.c-desc { width: 130px; }
 .c-op  { width: 36px; }
 
 td input[type=text], td input[type=number] {
   width: 100%; padding: 5px 7px; border: 1px solid #dde2e8; border-radius: 5px; font: inherit;
 }
 td input.sku { font-family: Consolas, monospace; font-weight: 600; letter-spacing: .3px; }
+td input.desc { font-size: 11px; color: #77808c; padding: 3px 5px; }
 tr.warn td { background: #fffaea; }
 tr.warn td input.sku { border-color: #e8c163; }
 tr.active td { background: #eef4ff; }

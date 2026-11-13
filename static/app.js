@@ -471,9 +471,9 @@ function renderTable() {
 
     tr.innerHTML = `
       <td><input type="checkbox" ${r.selected ? 'checked' : ''} data-k="selected"></td>
-      <td><input type="text" value="${esc(r.description)}" data-k="description"></td>
       <td><input type="text" class="sku" value="${esc(r.sku)}" data-k="sku">${hint}</td>
       <td><input type="number" min="1" max="999" value="${r.qty}" data-k="qty"></td>
+      <td><input type="text" class="desc" value="${esc(r.description)}" data-k="description"></td>
       <td><button class="del" title="${esc(t('row.del'))}">×</button></td>`;
 
     tr.querySelectorAll('input').forEach((inp) => {
