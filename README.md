@@ -142,6 +142,7 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 | 日志 | `journalctl -u sku-printer -f`（不写 `logs/service.log`） |
 | 权限 | 设备是 `root:lp 0660`，服务靠 unit 里的 `SupplementaryGroups=lp` 拿写权限 |
 | 字体 | `fonts-dejavu-core`（SKU 文字，替 Consolas Bold）、`fonts-wqy-zenhei`（中文，替黑体） |
+| OCR 的系统库 | `libgl1`。rapidocr 拉的是非 headless 的 `opencv-python`，`import cv2` 要 `libGL.so.1`；gw 没有图形界面，缺它时 `/api/ocr` 回 500「OCR 失败: libGL.so.1: cannot open shared object file」，打印不受影响（2026-11-13 装上）。验法：`ldd .venv/lib/python3.13/site-packages/cv2/cv2*.so \| grep "not found"` 应为空 |
 | A4 打印机 | EPSON L1350（无线，192.168.5.15），CUPS 队列 `EPSON-L1350`，IPP Everywhere 免驱动（`lpadmin -m everywhere`；Debian 的 ESC/P-R 驱动里没有这个型号）。`printing_cups.py` |
 
 **A4 打印机（2026-11-11 起）**：打印机下拉里 CUPS 队列排在标签机后面，默认打印机永远是标签机。
