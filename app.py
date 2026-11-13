@@ -296,7 +296,10 @@ def _pages_from_upload(data: bytes, filename: str, dpi: int = 300):
 
 @app.post("/api/file-info")
 def api_file_info():
-    """只读：页数 + 从 PDF 读出的纸张尺寸 + 第一页缩略图。不打印。"""
+    """只读：页数 + 从 PDF 读出的纸张尺寸 + 每一页的缩略图。不打印。
+
+    缩略图每页都给（页面上按网格列出来）。单页给大图；多页每张压到 320 px 以内，
+    600 页上限时一次也就几 MB，局域网里一次拉完比按页再请求简单（服务端不留文件）。"""
     f = request.files.get("file")
     if not f:
         return jsonify({"ok": False, "error": "没有收到文件"}), 400
@@ -304,16 +307,20 @@ def api_file_info():
         pages, w_mm, h_mm = _pages_from_upload(f.read(), f.filename, dpi=120)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": f"读取文件失败: {exc}"}), 400
-    thumb = pages[0].copy()
-    thumb.thumbnail((520, 520))
-    buf = io.BytesIO()
-    thumb.save(buf, "PNG")
+    box = 520 if len(pages) == 1 else 320
+    previews = []
+    for page in pages:
+        thumb = page.copy()
+        thumb.thumbnail((box, box))
+        buf = io.BytesIO()
+        thumb.save(buf, "PNG")
+        previews.append("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode())
     return jsonify({
         "ok": True,
         "pages": len(pages),
         "width_mm": w_mm,
         "height_mm": h_mm,
-        "preview": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+        "previews": previews,
     })
 
 

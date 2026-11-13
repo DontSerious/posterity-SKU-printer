@@ -38,6 +38,7 @@ function applyI18n() {
   renderPrinterOptions();
   renderTable();
   renderDb();
+  renderFilePages();
   if (lastRaw) $('rawSummary').textContent = t('raw.summary', lastRaw.count);
 }
 
@@ -514,12 +515,32 @@ function pickDbToList() {
 // --------------------------------------------------------------------------- //
 
 let pickedFile = null;   // File 对象；打印时原样再传给 /api/print-file
-let pickedInfo = null;   // {pages, width_mm, height_mm}
+let pickedInfo = null;   // {pages, width_mm, height_mm, previews: [每页缩略图 data URL]}
+let filePage = 0;        // 下方「标签预览」显示的是第几页（点缩略图切换）
+
+// 每一页一张缩略图。点哪页，下方预览就换成哪页
+function renderFilePages() {
+  const box = $('filePages');
+  const list = (pickedInfo && pickedInfo.previews) || [];
+  box.classList.toggle('single', list.length === 1);
+  box.innerHTML = list.map((src, i) => `
+    <figure class="${i === filePage ? 'on' : ''}" data-i="${i}">
+      <img src="${src}" alt="page ${i + 1}" loading="lazy">
+      ${list.length > 1 ? `<figcaption>${esc(t('file.page', i + 1, list.length))}</figcaption>` : ''}
+    </figure>`).join('');
+  box.querySelectorAll('figure').forEach((fig) => fig.addEventListener('click', () => {
+    filePage = parseInt(fig.dataset.i, 10);
+    box.querySelectorAll('figure').forEach((x) => x.classList.toggle('on', x === fig));
+    refreshPreview();
+  }));
+}
 
 async function handleDocFile(f) {
   if (!f) return;
   pickedFile = f;
   pickedInfo = null;
+  filePage = 0;
+  $('filePages').innerHTML = '';
   const el = $('fileInfo');
   el.textContent = t('file.reading');
   $('dropFile').classList.add('hidden');
@@ -533,7 +554,7 @@ async function handleDocFile(f) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Failed');
     pickedInfo = data;
-    $('filePreview').src = data.preview;
+    renderFilePages();
     el.textContent = data.width_mm
       ? t('file.info', f.name, data.pages, data.width_mm, data.height_mm)
       : t('file.infoimg', f.name);
@@ -827,9 +848,12 @@ function overWideWarning() {
 async function doPreview() {
   // 「打印文件」页签：预览换成那份文件的第一页，底下写它怎么落到纸上
   if (fileMode()) {
-    if (pickedInfo && pickedInfo.preview) $('preview').src = pickedInfo.preview;
+    const list = (pickedInfo && pickedInfo.previews) || [];
+    if (list.length) $('preview').src = list[Math.min(filePage, list.length - 1)];
     else $('preview').removeAttribute('src');
-    $('binfo').textContent = [overWideWarning(), fileFitText()].filter(Boolean).join('\n');
+    $('binfo').textContent = [overWideWarning(),
+      list.length > 1 ? t('file.page', filePage + 1, list.length) : '',
+      fileFitText()].filter(Boolean).join('\n');
     refreshSummary();  // 纸张变了，汇总里那句也要跟着变
     return;
   }

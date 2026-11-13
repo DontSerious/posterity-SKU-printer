@@ -198,7 +198,20 @@ td button.del { background: none; border: none; color: #b34141; cursor: pointer;
 .filego { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .filego label.inline { display: flex; gap: 6px; align-items: center; margin: 0; }
 .filego input[type="number"] { width: 70px; }
-#filePreview { cursor: default; }
+/* 每一页一张缩略图，网格排；点一页 = 下方「标签预览」显示那一页 */
+.filepages {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;
+  max-height: 60vh; overflow: auto; padding: 10px;
+  border: 1px solid #e2e6ea; border-radius: 6px; background: #eef0f2;
+}
+.filepages.single { grid-template-columns: minmax(0, 1fr); }
+.filepages figure {
+  margin: 0; padding: 6px; background: #fff; border: 2px solid transparent; border-radius: 5px;
+  cursor: pointer; text-align: center;
+}
+.filepages figure.on { border-color: #2f6fed; }
+.filepages img { display: block; width: 100%; height: auto; }
+.filepages figcaption { font-size: 11px; color: #77808c; margin-top: 4px; }
 
 /* SKU 库页签 */
 input.dbq {
