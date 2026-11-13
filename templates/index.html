@@ -20,6 +20,7 @@
         <button class="tab on" data-tab="img" data-i18n="tab.img">上传截图</button>
         <button class="tab" data-tab="txt" data-i18n="tab.txt">粘贴文本</button>
         <button class="tab" data-tab="file" data-i18n="tab.file">打印文件</button>
+        <button class="tab" data-tab="hist" data-i18n="tab.hist">历史</button>
       </div>
 
       <div id="paneImg">
@@ -80,6 +81,16 @@
             <button id="fileDry" class="secondary" data-i18n="btn.dry">干跑（只存 PNG，不出纸）</button>
           </div>
           <p id="fileResult" class="result"></p>
+        </div>
+      </div>
+
+      <div id="paneHist" class="hidden">
+        <input type="search" id="histQ" class="histq" autocomplete="off" spellcheck="false" data-i18n-ph="hist.placeholder">
+        <p class="hint" id="histInfo"></p>
+        <ul id="histList" class="histlist"></ul>
+        <div class="histgo">
+          <button id="histAdd" class="primary" disabled></button>
+          <button id="histClear" class="link" data-i18n="hist.clear">清空勾选</button>
         </div>
       </div>
     </section>

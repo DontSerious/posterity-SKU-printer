@@ -13,5 +13,9 @@ logs/
 learned.json
 learned.json.tmp
 
+# 打印记录（history.py，「历史」页签）：同上，本机运行数据
+history.json
+history.json.tmp
+
 # 本机配置，含 ERP 打印桥的 token。新机器从 config.example.json 复制一份
 config.json

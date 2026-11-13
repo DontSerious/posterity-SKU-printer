@@ -31,6 +31,20 @@
 
 > 只有「确定打印」会驱动打印机。想先看效果就点 **「干跑」**，标签会存成 PNG 到 `output/`，不费标签纸。
 
+## 从历史里挑（补打）
+
+第四个页签 **「历史」**：列出打印过的 SKU，按上次打印时间倒序。
+
+- 搜索框按 SKU 或描述做包含匹配，不分大小写；只剩一条时按回车就勾上。勾选跨搜索保留，
+  可以搜几次、勾几条，最后一起点 **「加入核对列表」**。
+- 加进去的行数量默认 **1 张**，在核对列表里改，打印照常走「确定打印」和二次确认。
+  已经在列表里的 SKU 不会重复加，只是重新勾上，数量不动。
+- 每条显示上次打了几张、累计打过几次。只有**真打印成功**才记，干跑、「打印文件」、ERP 打印桥都不记。
+- 记录在 `history.json`（`history.py`），和 `learned.json` 的纠错字典是两本账：字典会被人工修正改写或删掉条目，
+  当不了打印记录。`history.json` 第一次生成时会把 `learned.json` 里已有的 SKU 导进来，这些标成
+  「旧记录（数量未知）」。删了 `history.json` 就会再导一次。
+- 每条右边的 × 只删这条记录，不影响纠错字典。
+
 ## 打印文件（ERP 二维码标签 PDF）
 
 第三个页签 **「打印文件」**：把 PDF（或 PNG）拖进去 → 显示页数、尺寸和第一页预览 →
@@ -109,8 +123,8 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 
 | 改了什么 | 生效方式 |
 |---|---|
-| `app.py` / `ocr.py` / `label.py` / `printing.py` / `learned.py` | **自动重启服务**，几秒后生效 |
-| `config.json` / `learned.json` | **不监视**（故意的）。打印是先存配置、打完再记学习结果，监视它们会让 reloader 在出纸中途杀掉进程，spooler 只收到 0 字节的残废作业。这两个文件本来就是每次现读现用 |
+| `app.py` / `ocr.py` / `label.py` / `printing.py` / `learned.py` / `history.py` | **自动重启服务**，几秒后生效 |
+| `config.json` / `learned.json` / `history.json` | **不监视**（故意的）。打印是先存配置、打完再记学习结果，监视它们会让 reloader 在出纸中途杀掉进程，spooler 只收到 0 字节的残废作业。这两个文件本来就是每次现读现用 |
 | `templates/*.html`、`static/*.js`、`static/*.css` | **不用重启**，浏览器刷新即可（静态文件已关缓存） |
 
 ```powershell
@@ -188,6 +202,7 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 | `app.py` | Flask 路由。`/api/ocr` 只识别；**只有 `/api/print` 会出纸** |
 | `ocr.py` | 图片走 RapidOCR → 按 y 聚类还原表格行；文本走 `parse_text()` 逐行拆词。两条路共用同一套 SKU 归一化与易混字纠正。**无状态** —— 字典通过 `lookup=` 注入 |
 | `learned.py` | 从人工修正里学到的字典 / 映射 / 黑名单，见下节 |
+| `history.py` | 打印记录，「历史」页签的数据源，见「从历史里挑」 |
 | `label.py` | 按 203dpi 出 1:1 像素位图，条码模块按**整数像素**逐条画，不让驱动缩放 |
 | `printing.py` | 枚举打印机与驱动纸张、DEVMODE 设自定义尺寸、GDI 逐页打印；非 Windows 时转给下一行 |
 | `printing_tspl.py` | Linux 后端：发现 `/dev/usb/lp*` 上的 TSPL 打印机，位图包成 TSPL 直写 |
@@ -195,6 +210,7 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 | `sku-printer.service` | gw 上的 systemd unit |
 | `config.json` | 记住上次的打印机 / 纸张 / 版式，每次打印后自动更新。**不进 git**（含 ERP 打印桥的 token）—— 新机器上从 `config.example.json` 复制一份；不复制也能跑，代码里有同样的默认值 |
 | `learned.json` | 学到的东西落盘在这里。不进 git（是客户 SKU 清单），删了就从头学 |
+| `history.json` | 打印记录落盘在这里。不进 git，理由同上；删了会从 `learned.json` 重新导入 |
 
 ## 会自己纠错
 

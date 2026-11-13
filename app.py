@@ -19,6 +19,7 @@ import webbrowser
 from flask import Flask, jsonify, request, send_file, render_template
 import io
 
+import history
 import label as label_mod
 import learned
 import ocr as ocr_mod
@@ -437,8 +438,31 @@ def api_print():
     if res.get("ok") and not dry_run:
         for r in rows:
             learned.record_sku(r["sku"])
+        # 「历史」页签的打印记录。和上面的字典是两本账，理由见 history.py 头注释。
+        # 纸已经出了，记账失败不能让页面报「打印失败」—— 那会诱人再点一次、多出一份。
+        try:
+            history.record(rows)
+        except OSError as exc:
+            print(f"[history] 写 history.json 失败: {exc}")
 
     return jsonify(res)
+
+
+# --------------------------------------------------------------------------- #
+# 打印记录（「历史」页签）
+# --------------------------------------------------------------------------- #
+
+@app.route("/api/history", methods=["GET", "DELETE"])
+def api_history():
+    """GET 拉全部记录（搜索在前端做），DELETE 删一条。都不碰打印机。"""
+    if request.method == "DELETE":
+        payload = request.get_json(silent=True) or {}
+        try:
+            ok = history.forget(payload.get("sku") or "")
+        except OSError as exc:
+            return jsonify({"ok": False, "error": f"写 history.json 失败: {exc}"}), 500
+        return jsonify({"ok": ok, "items": history.items()})
+    return jsonify({"ok": True, "items": history.items()})
 
 
 # --------------------------------------------------------------------------- #
@@ -594,7 +618,7 @@ if __name__ == "__main__":
         extra_files = [
             os.path.join(BASE_DIR, f)
             for f in ("app.py", "ocr.py", "label.py", "printing.py", "printing_tspl.py",
-                      "learned.py")
+                      "learned.py", "history.py")
         ]
 
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):

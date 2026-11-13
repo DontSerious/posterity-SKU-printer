@@ -37,6 +37,7 @@ function applyI18n() {
   renderPaperOptions();
   renderPrinterOptions();
   renderTable();
+  renderHistory();
   if (lastRaw) $('rawSummary').textContent = t('raw.summary', lastRaw.count);
 }
 
@@ -326,6 +327,122 @@ function switchTab(name) {
   $('paneImg').classList.toggle('hidden', name !== 'img');
   $('paneTxt').classList.toggle('hidden', name !== 'txt');
   $('paneFile').classList.toggle('hidden', name !== 'file');
+  $('paneHist').classList.toggle('hidden', name !== 'hist');
+  if (name === 'hist') {
+    if (!histItems) loadHistory();
+    $('histQ').focus();
+  }
+}
+
+// --------------------------------------------------------------------------- //
+// 历史：打过的 SKU 搜出来，勾选后加进核对列表，数量在核对列表里改、照常走「确定打印」
+// --------------------------------------------------------------------------- //
+
+let histItems = null;          // null = 还没拉过；打印成功后置回 null，下次切过来重拉
+const histPicked = new Set();  // 勾选跨搜索保留：搜 A 勾两条、再搜 B 勾一条，一起加
+const HIST_SHOW = 200;         // 一屏最多列这么多，再多就让人多敲几个字
+
+async function loadHistory() {
+  $('histInfo').textContent = t('hist.loading');
+  try {
+    const d = await (await fetch('/api/history')).json();
+    if (!d.ok) throw new Error(d.error || 'Failed');
+    histItems = d.items;
+  } catch (e) {
+    $('histInfo').textContent = String(e.message || e);
+    return;
+  }
+  renderHistory();
+}
+
+function histWhen(iso) {
+  if (!iso) return '';
+  const [d, tm] = iso.split('T');
+  // 今年的省掉年份，留到分钟；往年的只留日期
+  return d.slice(0, 4) === String(new Date().getFullYear())
+    ? `${d.slice(5)} ${(tm || '').slice(0, 5)}`
+    : d;
+}
+
+function renderHistory() {
+  const ul = $('histList');
+  if (!histItems) { ul.innerHTML = ''; syncHistAdd(); return; }
+  const q = $('histQ').value.trim().toLowerCase();
+  const hits = q
+    ? histItems.filter((h) => h.sku.toLowerCase().includes(q) || h.desc.toLowerCase().includes(q))
+    : histItems;
+  const shown = hits.slice(0, HIST_SHOW);
+
+  ul.innerHTML = shown.map((h) => `
+    <li class="${histPicked.has(h.sku) ? 'on' : ''}">
+      <label>
+        <input type="checkbox" data-sku="${esc(h.sku)}" ${histPicked.has(h.sku) ? 'checked' : ''}>
+        <span class="hsku">${esc(h.sku)}</span>
+        ${h.desc ? `<span class="hdesc">${esc(h.desc)}</span>` : ''}
+        <span class="hmeta">${esc(h.times
+          ? t('hist.meta', h.last_qty, h.times, histWhen(h.last))
+          : t('hist.metaOld', histWhen(h.last)))}</span>
+      </label>
+      <button class="link lx" data-sku="${esc(h.sku)}" title="${esc(t('hist.del'))}">×</button>
+    </li>`).join('');
+
+  if (!histItems.length) $('histInfo').textContent = t('hist.none');
+  else if (!hits.length) $('histInfo').textContent = t('hist.nomatch', $('histQ').value.trim());
+  else if (hits.length > shown.length) $('histInfo').textContent = t('hist.more', hits.length, shown.length);
+  else $('histInfo').textContent = t('hist.count', hits.length, histItems.length);
+
+  ul.querySelectorAll('input[type=checkbox]').forEach((cb) => cb.addEventListener('change', () => {
+    if (cb.checked) histPicked.add(cb.dataset.sku); else histPicked.delete(cb.dataset.sku);
+    cb.closest('li').classList.toggle('on', cb.checked);
+    syncHistAdd();
+  }));
+  ul.querySelectorAll('.lx').forEach((b) => b.addEventListener('click', () => forgetHistory(b.dataset.sku)));
+  syncHistAdd();
+}
+
+function syncHistAdd() {
+  $('histAdd').textContent = t('hist.add', histPicked.size);
+  $('histAdd').disabled = histPicked.size === 0;
+}
+
+async function forgetHistory(sku) {
+  if (!confirm(t('hist.delConfirm', sku))) return;
+  try {
+    const d = await (await fetch('/api/history', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sku }),
+    })).json();
+    if (d.items) histItems = d.items;
+    if (!d.ok) throw new Error(d.error || 'Failed');
+  } catch (e) {
+    $('histInfo').textContent = String(e.message || e);
+    return;
+  }
+  histPicked.delete(sku);
+  renderHistory();
+}
+
+function addPickedHistory() {
+  const bySku = new Map(histItems.map((h) => [h.sku, h]));
+  let added = 0;
+  let already = 0;
+  // 按历史列表的顺序加，不按勾选的先后 —— 列表里看到什么顺序，核对列表就是什么顺序
+  histItems.filter((h) => histPicked.has(h.sku)).forEach((h) => {
+    const dup = rows.find((r) => r.sku.trim() === h.sku);
+    if (dup) { dup.selected = true; already += 1; return; }  // 已在列表里：勾上，数量不动
+    rows.push({
+      selected: true, description: bySku.get(h.sku).desc, sku: h.sku, qty: 1,
+      low_confidence: false, qty_detected: true, source: 'history', origin: '',
+      junk: false, corrected_from: null, suggestion: null,
+    });
+    added += 1;
+  });
+  if (added) activeIndex = rows.length - 1;
+  histPicked.clear();
+  renderTable();
+  renderHistory();
+  setStatus(already ? t('hist.addedDup', added, already) : t('hist.added', added), 'ok');
 }
 
 // --------------------------------------------------------------------------- //
@@ -672,8 +789,12 @@ async function doPreview() {
 // --------------------------------------------------------------------------- //
 
 async function submitPrint(dryRun) {
+  // description 不进标签，只给「历史」页签记一笔，搜的时候能按描述搜
   const sel = rows.filter((r) => r.selected && r.sku.trim())
-    .map((r) => ({ sku: r.sku.trim(), qty: Math.max(1, parseInt(r.qty, 10) || 1) }));
+    .map((r) => ({
+      sku: r.sku.trim(), qty: Math.max(1, parseInt(r.qty, 10) || 1),
+      description: (r.description || '').trim(),
+    }));
   if (!sel.length) return;
 
   const p = paperSpec();
@@ -702,6 +823,11 @@ async function submitPrint(dryRun) {
     el.textContent = dryRun
       ? t('dry.done', data.files.length, data.total_labels, data.files.join('\n'))
       : t('print.done', data.printed, $('printer').value);
+    if (!dryRun) {
+      // 服务端刚记了一笔。历史页签正开着就当场重拉，否则下次切过去时再拉
+      histItems = null;
+      if (!$('paneHist').classList.contains('hidden')) loadHistory();
+    }
   } catch (e) {
     el.className = 'result err';
     el.textContent = String(e.message || e);
@@ -814,6 +940,18 @@ function bind() {
     activeIndex = rows.length - 1;
     renderTable();
   });
+
+  // 历史页签
+  $('histQ').addEventListener('input', renderHistory);
+  $('histQ').addEventListener('keydown', (e) => {
+    // 回车 = 勾上唯一的那条搜索结果。只是勾选，加不加进列表还要点按钮
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const boxes = $('histList').querySelectorAll('input[type=checkbox]');
+    if (boxes.length === 1 && !boxes[0].checked) boxes[0].click();
+  });
+  $('histAdd').addEventListener('click', addPickedHistory);
+  $('histClear').addEventListener('click', () => { histPicked.clear(); renderHistory(); });
 
   $('print').addEventListener('click', () => submitPrint(false));
   $('dry').addEventListener('click', () => submitPrint(true));
