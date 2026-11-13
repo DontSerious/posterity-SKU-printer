@@ -200,29 +200,37 @@ td button.del { background: none; border: none; color: #b34141; cursor: pointer;
 .filego input[type="number"] { width: 70px; }
 #filePreview { cursor: default; }
 
-/* 历史页签 */
-input.histq {
+/* SKU 库页签 */
+input.dbq {
   width: 100%; padding: 8px 10px; border: 1px solid #dde2e8; border-radius: 6px;
   font: 13px Consolas, "Cascadia Mono", monospace; background: #fafbfc;
 }
-input.histq:focus { outline: none; border-color: #2f6fed; background: #fff; }
-.histlist {
+input.dbq:focus { outline: none; border-color: #2f6fed; background: #fff; }
+.dbinfo button.link { font-size: 12px; padding: 0; margin-left: 6px; }
+.dblist {
   list-style: none; margin: 8px 0 0; padding: 0; max-height: 52vh; overflow: auto;
   border: 1px solid #edf0f3; border-radius: 6px;
 }
-.histlist:empty { display: none; }
-.histlist li { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 0; border-bottom: 1px solid #edf0f3; }
-.histlist li:last-child { border-bottom: none; }
-.histlist li.on { background: #eef4ff; }
-.histlist label {
+.dblist:empty { display: none; }
+.dblist li { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 0; border-bottom: 1px solid #edf0f3; }
+.dblist li:last-child { border-bottom: none; }
+.dblist li.on { background: #eef4ff; }
+.dblist li.editing { padding: 5px 8px; background: #fffaea; }
+.dblist label {
   flex: 1; min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px;
   padding: 6px 0 6px 8px; cursor: pointer;
 }
-.histlist input[type=checkbox] { align-self: center; margin: 0; }
-.hsku { font-family: Consolas, monospace; font-weight: 600; letter-spacing: .3px; word-break: break-all; }
-.hdesc { font-size: 11px; color: #77808c; }
-.hmeta { font-size: 11px; color: #98a1ab; margin-left: auto; white-space: nowrap; }
-.histgo { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
-.histgo button.primary { width: auto; padding: 8px 18px; margin: 0; }
+.dblist input[type=checkbox] { align-self: center; margin: 0; }
+.dblist li.editing input[type=text] {
+  padding: 4px 7px; border: 1px solid #dde2e8; border-radius: 5px; font: inherit; min-width: 0;
+}
+.dblist li.editing .esku { flex: 3; font-family: Consolas, monospace; font-weight: 600; }
+.dblist li.editing .edesc { flex: 2; font-size: 12px; }
+.dblist button.ed { color: #77808c; font-size: 13px; line-height: 1; }
+.dsku { font-family: Consolas, monospace; font-weight: 600; letter-spacing: .3px; word-break: break-all; }
+.ddesc { font-size: 11px; color: #77808c; }
+.dbgo { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.dbgo button.primary { width: auto; padding: 8px 18px; margin: 0; }
+textarea.dbimport { min-height: 120px; margin-top: 8px; }
 
 .hidden { display: none !important; }

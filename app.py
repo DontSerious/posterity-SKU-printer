@@ -19,10 +19,10 @@ import webbrowser
 from flask import Flask, jsonify, request, send_file, render_template
 import io
 
-import history
 import label as label_mod
 import learned
 import ocr as ocr_mod
+import skudb
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -438,31 +438,56 @@ def api_print():
     if res.get("ok") and not dry_run:
         for r in rows:
             learned.record_sku(r["sku"])
-        # 「历史」页签的打印记录。和上面的字典是两本账，理由见 history.py 头注释。
-        # 纸已经出了，记账失败不能让页面报「打印失败」—— 那会诱人再点一次、多出一份。
+        # 库里没有的 SKU 自动收进「SKU 库」。和上面的纠错字典是两本账，见 skudb.py 头注释。
+        # 纸已经出了，入库失败不能让页面报「打印失败」—— 那会诱人再点一次、多出一份。
         try:
-            history.record(rows)
-        except OSError as exc:
-            print(f"[history] 写 history.json 失败: {exc}")
+            res["added_to_db"] = skudb.record_printed(rows)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[skudb] 自动入库失败: {exc}")
 
     return jsonify(res)
 
 
 # --------------------------------------------------------------------------- #
-# 打印记录（「历史」页签）
+# SKU 库（「SKU 库」页签）—— 都不碰打印机
 # --------------------------------------------------------------------------- #
 
-@app.route("/api/history", methods=["GET", "DELETE"])
-def api_history():
-    """GET 拉全部记录（搜索在前端做），DELETE 删一条。都不碰打印机。"""
+def _db_reply(fn):
+    """跑一次库操作，成功回整份清单（前端直接重画），失败回 ok=false + 原因。"""
+    try:
+        extra = fn() or {}
+    except skudb.Conflict as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+    except (ValueError, KeyError) as exc:
+        return jsonify({"ok": False, "error": str(exc).strip("'\"")}), 400
+    except Exception as exc:  # noqa: BLE001  sqlite 打不开 / 磁盘满之类
+        return jsonify({"ok": False, "error": f"SKU 库出错: {exc}"}), 500
+    return jsonify({"ok": True, **extra, "items": skudb.items()})
+
+
+@app.route("/api/skus", methods=["GET", "POST", "PUT", "DELETE"])
+def api_skus():
+    """GET 整份清单（搜索在前端做）；POST 加一条 {sku, description}；
+    PUT 改一条 {old_sku, sku, description}；DELETE 删一条 {sku}。"""
+    p = request.get_json(silent=True) or {}
+    if request.method == "POST":
+        return _db_reply(lambda: skudb.add(p.get("sku") or "", p.get("description") or ""))
+    if request.method == "PUT":
+        return _db_reply(lambda: skudb.update(p.get("old_sku") or "", p.get("sku") or "",
+                                              p.get("description") or ""))
     if request.method == "DELETE":
-        payload = request.get_json(silent=True) or {}
-        try:
-            ok = history.forget(payload.get("sku") or "")
-        except OSError as exc:
-            return jsonify({"ok": False, "error": f"写 history.json 失败: {exc}"}), 500
-        return jsonify({"ok": ok, "items": history.items()})
-    return jsonify({"ok": True, "items": history.items()})
+        def _del():
+            if not skudb.delete(p.get("sku") or ""):
+                raise KeyError(f"库里没有 {p.get('sku')}")
+        return _db_reply(_del)
+    return _db_reply(lambda: None)
+
+
+@app.post("/api/skus/import")
+def api_skus_import():
+    """批量粘贴：每行 SKU，可选 ⇥描述。已在库里的跳过。"""
+    text = (request.get_json(silent=True) or {}).get("text") or ""
+    return _db_reply(lambda: skudb.import_text(text))
 
 
 # --------------------------------------------------------------------------- #
@@ -618,7 +643,7 @@ if __name__ == "__main__":
         extra_files = [
             os.path.join(BASE_DIR, f)
             for f in ("app.py", "ocr.py", "label.py", "printing.py", "printing_tspl.py",
-                      "learned.py", "history.py")
+                      "learned.py", "skudb.py")
         ]
 
     if not no_browser and not os.environ.get("WERKZEUG_RUN_MAIN"):

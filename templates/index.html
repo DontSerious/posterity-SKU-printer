@@ -20,7 +20,7 @@
         <button class="tab on" data-tab="img" data-i18n="tab.img">上传截图</button>
         <button class="tab" data-tab="txt" data-i18n="tab.txt">粘贴文本</button>
         <button class="tab" data-tab="file" data-i18n="tab.file">打印文件</button>
-        <button class="tab" data-tab="hist" data-i18n="tab.hist">历史</button>
+        <button class="tab" data-tab="db" data-i18n="tab.db">SKU 库</button>
       </div>
 
       <div id="paneImg">
@@ -84,14 +84,21 @@
         </div>
       </div>
 
-      <div id="paneHist" class="hidden">
-        <input type="search" id="histQ" class="histq" autocomplete="off" spellcheck="false" data-i18n-ph="hist.placeholder">
-        <p class="hint" id="histInfo"></p>
-        <ul id="histList" class="histlist"></ul>
-        <div class="histgo">
-          <button id="histAdd" class="primary" disabled></button>
-          <button id="histClear" class="link" data-i18n="hist.clear">清空勾选</button>
+      <div id="paneDb" class="hidden">
+        <input type="search" id="dbQ" class="dbq" autocomplete="off" spellcheck="false" data-i18n-ph="db.placeholder">
+        <p class="hint dbinfo"><span id="dbInfo"></span> <button id="dbQuickAdd" class="link hidden"></button></p>
+        <ul id="dbList" class="dblist"></ul>
+        <div class="dbgo">
+          <button id="dbPick" class="primary" disabled></button>
+          <button id="dbClear" class="link" data-i18n="db.clear">清空勾选</button>
         </div>
+        <details id="dbImportWrap" class="raw">
+          <summary data-i18n="db.import.title">添加 / 批量导入</summary>
+          <textarea id="dbImportText" class="dbimport" spellcheck="false" data-i18n-ph="db.import.placeholder"></textarea>
+          <p class="hint" data-i18n="db.import.hint"></p>
+          <button id="dbImport" class="secondary narrow" data-i18n="db.import.go">导入</button>
+        </details>
+        <p id="dbResult" class="result"></p>
       </div>
     </section>
 

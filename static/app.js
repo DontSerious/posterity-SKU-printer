@@ -37,7 +37,7 @@ function applyI18n() {
   renderPaperOptions();
   renderPrinterOptions();
   renderTable();
-  renderHistory();
+  renderDb();
   if (lastRaw) $('rawSummary').textContent = t('raw.summary', lastRaw.count);
 }
 
@@ -327,122 +327,178 @@ function switchTab(name) {
   $('paneImg').classList.toggle('hidden', name !== 'img');
   $('paneTxt').classList.toggle('hidden', name !== 'txt');
   $('paneFile').classList.toggle('hidden', name !== 'file');
-  $('paneHist').classList.toggle('hidden', name !== 'hist');
-  if (name === 'hist') {
-    if (!histItems) loadHistory();
-    $('histQ').focus();
+  $('paneDb').classList.toggle('hidden', name !== 'db');
+  if (name === 'db') {
+    if (!dbItems) loadDb();
+    $('dbQ').focus();
   }
 }
 
 // --------------------------------------------------------------------------- //
-// 历史：打过的 SKU 搜出来，勾选后加进核对列表，数量在核对列表里改、照常走「确定打印」
+// SKU 库：自己维护的 SKU 清单。搜出来勾选，加进核对列表，数量在核对列表里改、照常走「确定打印」
 // --------------------------------------------------------------------------- //
 
-let histItems = null;          // null = 还没拉过；打印成功后置回 null，下次切过来重拉
-const histPicked = new Set();  // 勾选跨搜索保留：搜 A 勾两条、再搜 B 勾一条，一起加
-const HIST_SHOW = 200;         // 一屏最多列这么多，再多就让人多敲几个字
+let dbItems = null;          // null = 还没拉过；真打印成功后置回 null（可能自动入了库），下次切过来重拉
+const dbPicked = new Set();  // 勾选跨搜索保留：搜 A 勾两条、再搜 B 勾一条，一起加
+let dbEditing = null;        // 正在改的那条 SKU（行内变成输入框）
+const DB_SHOW = 200;         // 一屏最多列这么多，再多就让人多敲几个字
 
-async function loadHistory() {
-  $('histInfo').textContent = t('hist.loading');
+// 所有库操作都回整份清单，成功就换掉 dbItems 重画；失败把原因写在面板底下
+async function dbCall(method, url, body) {
+  const el = $('dbResult');
+  el.className = 'result';
+  el.textContent = '';
   try {
-    const d = await (await fetch('/api/history')).json();
+    const opt = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opt.body = JSON.stringify(body);
+    const d = await (await fetch(url, opt)).json();
+    if (d.items) dbItems = d.items;
     if (!d.ok) throw new Error(d.error || 'Failed');
-    histItems = d.items;
+    return d;
   } catch (e) {
-    $('histInfo').textContent = String(e.message || e);
-    return;
+    el.className = 'result err';
+    el.textContent = String(e.message || e);
+    return null;
+  } finally {
+    renderDb();
   }
-  renderHistory();
 }
 
-function histWhen(iso) {
-  if (!iso) return '';
-  const [d, tm] = iso.split('T');
-  // 今年的省掉年份，留到分钟；往年的只留日期
-  return d.slice(0, 4) === String(new Date().getFullYear())
-    ? `${d.slice(5)} ${(tm || '').slice(0, 5)}`
-    : d;
+function loadDb() {
+  $('dbInfo').textContent = t('db.loading');
+  return dbCall('GET', '/api/skus');
 }
 
-function renderHistory() {
-  const ul = $('histList');
-  if (!histItems) { ul.innerHTML = ''; syncHistAdd(); return; }
-  const q = $('histQ').value.trim().toLowerCase();
-  const hits = q
-    ? histItems.filter((h) => h.sku.toLowerCase().includes(q) || h.desc.toLowerCase().includes(q))
-    : histItems;
-  const shown = hits.slice(0, HIST_SHOW);
+function dbHits() {
+  const q = $('dbQ').value.trim().toLowerCase();
+  return q
+    ? dbItems.filter((s) => s.sku.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
+    : dbItems;
+}
 
-  ul.innerHTML = shown.map((h) => `
-    <li class="${histPicked.has(h.sku) ? 'on' : ''}">
+function renderDb() {
+  const ul = $('dbList');
+  syncDbPick();
+  if (!dbItems) { ul.innerHTML = ''; return; }
+  const q = $('dbQ').value.trim();
+  const hits = dbHits();
+  const shown = hits.slice(0, DB_SHOW);
+
+  ul.innerHTML = shown.map((s) => (s.sku === dbEditing ? `
+    <li class="editing">
+      <input type="text" class="esku" value="${esc(s.sku)}" data-k="sku">
+      <input type="text" class="edesc" value="${esc(s.description)}" data-k="description"
+             placeholder="${esc(t('db.descph'))}">
+      <button class="link save">${esc(t('db.save'))}</button>
+      <button class="link cancel">${esc(t('db.cancel'))}</button>
+    </li>` : `
+    <li class="${dbPicked.has(s.sku) ? 'on' : ''}">
       <label>
-        <input type="checkbox" data-sku="${esc(h.sku)}" ${histPicked.has(h.sku) ? 'checked' : ''}>
-        <span class="hsku">${esc(h.sku)}</span>
-        ${h.desc ? `<span class="hdesc">${esc(h.desc)}</span>` : ''}
-        <span class="hmeta">${esc(h.times
-          ? t('hist.meta', h.last_qty, h.times, histWhen(h.last))
-          : t('hist.metaOld', histWhen(h.last)))}</span>
+        <input type="checkbox" data-sku="${esc(s.sku)}" ${dbPicked.has(s.sku) ? 'checked' : ''}>
+        <span class="dsku">${esc(s.sku)}</span>
+        ${s.description ? `<span class="ddesc">${esc(s.description)}</span>` : ''}
       </label>
-      <button class="link lx" data-sku="${esc(h.sku)}" title="${esc(t('hist.del'))}">×</button>
-    </li>`).join('');
+      <button class="link ed" data-sku="${esc(s.sku)}" title="${esc(t('db.edit'))}">✎</button>
+      <button class="link lx" data-sku="${esc(s.sku)}" title="${esc(t('db.del'))}">×</button>
+    </li>`)).join('');
 
-  if (!histItems.length) $('histInfo').textContent = t('hist.none');
-  else if (!hits.length) $('histInfo').textContent = t('hist.nomatch', $('histQ').value.trim());
-  else if (hits.length > shown.length) $('histInfo').textContent = t('hist.more', hits.length, shown.length);
-  else $('histInfo').textContent = t('hist.count', hits.length, histItems.length);
+  const info = $('dbInfo');
+  const quick = $('dbQuickAdd');
+  quick.classList.add('hidden');
+  if (!dbItems.length && !q) info.textContent = t('db.none');
+  else if (!hits.length) {
+    info.textContent = t('db.nomatch', q);
+    // 搜不到的那串，一键收进库
+    quick.textContent = t('db.quickadd', q);
+    quick.classList.remove('hidden');
+  } else if (hits.length > shown.length) info.textContent = t('db.more', hits.length, shown.length);
+  else info.textContent = t('db.count', hits.length, dbItems.length);
 
   ul.querySelectorAll('input[type=checkbox]').forEach((cb) => cb.addEventListener('change', () => {
-    if (cb.checked) histPicked.add(cb.dataset.sku); else histPicked.delete(cb.dataset.sku);
+    if (cb.checked) dbPicked.add(cb.dataset.sku); else dbPicked.delete(cb.dataset.sku);
     cb.closest('li').classList.toggle('on', cb.checked);
-    syncHistAdd();
+    syncDbPick();
   }));
-  ul.querySelectorAll('.lx').forEach((b) => b.addEventListener('click', () => forgetHistory(b.dataset.sku)));
-  syncHistAdd();
-}
+  ul.querySelectorAll('.ed').forEach((b) => b.addEventListener('click', () => {
+    dbEditing = b.dataset.sku;
+    renderDb();
+    const inp = ul.querySelector('li.editing .esku');
+    if (inp) inp.focus();
+  }));
+  ul.querySelectorAll('.lx').forEach((b) => b.addEventListener('click', () => deleteDbSku(b.dataset.sku)));
 
-function syncHistAdd() {
-  $('histAdd').textContent = t('hist.add', histPicked.size);
-  $('histAdd').disabled = histPicked.size === 0;
-}
-
-async function forgetHistory(sku) {
-  if (!confirm(t('hist.delConfirm', sku))) return;
-  try {
-    const d = await (await fetch('/api/history', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku }),
-    })).json();
-    if (d.items) histItems = d.items;
-    if (!d.ok) throw new Error(d.error || 'Failed');
-  } catch (e) {
-    $('histInfo').textContent = String(e.message || e);
-    return;
+  const ed = ul.querySelector('li.editing');
+  if (ed) {
+    const save = () => saveDbEdit(ed.querySelector('.esku').value, ed.querySelector('.edesc').value);
+    ed.querySelector('.save').addEventListener('click', save);
+    ed.querySelector('.cancel').addEventListener('click', () => { dbEditing = null; renderDb(); });
+    ed.querySelectorAll('input').forEach((inp) => inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); save(); }
+      if (e.key === 'Escape') { dbEditing = null; renderDb(); }
+    }));
   }
-  histPicked.delete(sku);
-  renderHistory();
 }
 
-function addPickedHistory() {
-  const bySku = new Map(histItems.map((h) => [h.sku, h]));
+function syncDbPick() {
+  $('dbPick').textContent = t('db.pick', dbPicked.size);
+  $('dbPick').disabled = dbPicked.size === 0;
+}
+
+async function saveDbEdit(sku, description) {
+  const old = dbEditing;
+  const d = await dbCall('PUT', '/api/skus', { old_sku: old, sku: sku.trim(), description });
+  if (!d) return;  // 撞名 / 空 SKU：留在编辑态，原因写在底下
+  dbEditing = null;
+  if (dbPicked.delete(old)) dbPicked.add(sku.trim());  // 改名时勾选跟着走
+  renderDb();
+}
+
+async function deleteDbSku(sku) {
+  if (!confirm(t('db.delConfirm', sku))) return;
+  if (await dbCall('DELETE', '/api/skus', { sku })) dbPicked.delete(sku);
+  renderDb();
+}
+
+async function quickAddDb() {
+  const sku = $('dbQ').value.trim();
+  if (!sku) return;
+  if (await dbCall('POST', '/api/skus', { sku, description: '' })) {
+    $('dbResult').className = 'result ok';
+    $('dbResult').textContent = t('db.added1', sku);
+  }
+}
+
+async function importDb() {
+  const text = $('dbImportText').value;
+  if (!text.trim()) return;
+  const d = await dbCall('POST', '/api/skus/import', { text });
+  if (!d) return;
+  $('dbImportText').value = '';
+  const el = $('dbResult');
+  el.className = 'result ok';
+  el.textContent = t('db.imported', d.added.length, d.skipped.length)
+    + (d.bad.length ? '\n' + t('db.importBad', d.bad.join('\n')) : '');
+}
+
+function pickDbToList() {
   let added = 0;
   let already = 0;
-  // 按历史列表的顺序加，不按勾选的先后 —— 列表里看到什么顺序，核对列表就是什么顺序
-  histItems.filter((h) => histPicked.has(h.sku)).forEach((h) => {
-    const dup = rows.find((r) => r.sku.trim() === h.sku);
+  // 按库里的顺序加，不按勾选的先后 —— 面板里看到什么顺序，核对列表就是什么顺序
+  dbItems.filter((s) => dbPicked.has(s.sku)).forEach((s) => {
+    const dup = rows.find((r) => r.sku.trim() === s.sku);
     if (dup) { dup.selected = true; already += 1; return; }  // 已在列表里：勾上，数量不动
     rows.push({
-      selected: true, description: bySku.get(h.sku).desc, sku: h.sku, qty: 1,
-      low_confidence: false, qty_detected: true, source: 'history', origin: '',
+      selected: true, description: s.description, sku: s.sku, qty: 1,
+      low_confidence: false, qty_detected: true, source: 'db', origin: '',
       junk: false, corrected_from: null, suggestion: null,
     });
     added += 1;
   });
   if (added) activeIndex = rows.length - 1;
-  histPicked.clear();
+  dbPicked.clear();
   renderTable();
-  renderHistory();
-  setStatus(already ? t('hist.addedDup', added, already) : t('hist.added', added), 'ok');
+  renderDb();
+  setStatus(already ? t('db.pickedDup', added, already) : t('db.picked', added), 'ok');
 }
 
 // --------------------------------------------------------------------------- //
@@ -823,10 +879,11 @@ async function submitPrint(dryRun) {
     el.textContent = dryRun
       ? t('dry.done', data.files.length, data.total_labels, data.files.join('\n'))
       : t('print.done', data.printed, $('printer').value);
-    if (!dryRun) {
-      // 服务端刚记了一笔。历史页签正开着就当场重拉，否则下次切过去时再拉
-      histItems = null;
-      if (!$('paneHist').classList.contains('hidden')) loadHistory();
+    if (!dryRun && (data.added_to_db || []).length) {
+      // 库里没有的 SKU 服务端已自动收进库。库页签正开着就当场重拉，否则下次切过去时再拉
+      el.textContent += '\n' + t('db.autoadded', data.added_to_db.length, data.added_to_db.join(', '));
+      dbItems = null;
+      if (!$('paneDb').classList.contains('hidden')) loadDb();
     }
   } catch (e) {
     el.className = 'result err';
@@ -941,17 +998,19 @@ function bind() {
     renderTable();
   });
 
-  // 历史页签
-  $('histQ').addEventListener('input', renderHistory);
-  $('histQ').addEventListener('keydown', (e) => {
+  // SKU 库页签
+  $('dbQ').addEventListener('input', renderDb);
+  $('dbQ').addEventListener('keydown', (e) => {
     // 回车 = 勾上唯一的那条搜索结果。只是勾选，加不加进列表还要点按钮
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const boxes = $('histList').querySelectorAll('input[type=checkbox]');
+    const boxes = $('dbList').querySelectorAll('input[type=checkbox]');
     if (boxes.length === 1 && !boxes[0].checked) boxes[0].click();
   });
-  $('histAdd').addEventListener('click', addPickedHistory);
-  $('histClear').addEventListener('click', () => { histPicked.clear(); renderHistory(); });
+  $('dbPick').addEventListener('click', pickDbToList);
+  $('dbClear').addEventListener('click', () => { dbPicked.clear(); renderDb(); });
+  $('dbQuickAdd').addEventListener('click', quickAddDb);
+  $('dbImport').addEventListener('click', importDb);
 
   $('print').addEventListener('click', () => submitPrint(false));
   $('dry').addEventListener('click', () => submitPrint(true));
