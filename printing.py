@@ -325,6 +325,22 @@ def print_file(printer: str, data: bytes, filename: str, copies: int = 1,
     return {"ok": True, "receipt": receipt, "copies": max(1, int(copies))}
 
 
+def office_printer() -> str:
+    """第一台 A4 普通打印机（gw 上就是 EPSON L1350）的名字，没有就是空串。
+
+    「A4 打印截图」按钮不看下拉里选的是谁：下拉在打 SKU 标签时一直停在标签机上。
+    Windows 上没有这条路（那台已经没有 A4 打印机接在服务上），回空串。"""
+    return next((p["name"] for p in list_printers() if p.get("kind") == "office"), "")
+
+
+def print_sheet(printer: str, data: bytes) -> dict:
+    """订单截图缩放到一页 A4 交给 A4 打印机，一份，见 printing_cups.a4_fit_page。"""
+    if not _is_cups(printer):
+        raise RuntimeError(f"{printer} 不是 CUPS 队列")
+    receipt = _cups.print_sheet(printer, data, 1, "Order sheet")
+    return {"ok": True, "receipt": receipt, "printer": printer}
+
+
 def backfeed(printer: str, paper: PaperSpec) -> dict:
     """往回退一张纸（标签高 + 间隙），收回装纸时多走出去的那张空白。不出纸。
 

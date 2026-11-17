@@ -57,6 +57,10 @@ const I18N = {
     'drop.hint': '或 <b>点击选择文件</b>，或直接按 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴截图',
     'shot.zoomhint': '点图片可放大到原始尺寸，方便逐行核对',
     'shot.reupload': '重新上传',
+    'shot.a4': 'A4 打印这张图',
+    'shot.a4none': '没有找到 A4 打印机：它只在 gw 上（CUPS 里的 EPSON）',
+    'shot.a4confirm': (printer) => `把这张截图打在一张 A4 上？\n\n打印机：${printer}\n等比缩放到一页 A4 里，靠上排\n\n确定开始打印？`,
+    'shot.a4done': (printer) => `已发送到 ${printer}：1 张 A4`,
 
     'txt.placeholder': '每行一个 SKU，例如：\n\nPHC-MIN-MP-WLB X3\nPHC-GCL-DW-WLB X2\nPHC-CLA-DW-WLB X2\nPHC-ELE-BK X1',
     'txt.hint': '数量支持 <code>X3</code> / <code>x3</code> / <code>3</code> / <code>(3)</code> 等写法；也可以直接从 Excel 复制整行（描述 + SKU + 数量）。不写数量默认按 1 张。',
@@ -208,6 +212,10 @@ const I18N = {
     'drop.hint': 'or <b>click to pick a file</b>, or just press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste',
     'shot.zoomhint': 'Click the image to view it at full size for row-by-row checking',
     'shot.reupload': 'Upload another',
+    'shot.a4': 'Print this image on A4',
+    'shot.a4none': 'No A4 printer found: it is only on gw (the EPSON in CUPS)',
+    'shot.a4confirm': (printer) => `Print this screenshot on one A4 sheet?\n\nPrinter: ${printer}\nScaled to fit one A4 page, placed at the top\n\nStart printing?`,
+    'shot.a4done': (printer) => `Sent to ${printer}: 1 A4 sheet`,
 
     'txt.placeholder': 'One SKU per line, e.g.\n\nPHC-MIN-MP-WLB X3\nPHC-GCL-DW-WLB X2\nPHC-CLA-DW-WLB X2\nPHC-ELE-BK X1',
     'txt.hint': 'Quantity accepts <code>X3</code> / <code>x3</code> / <code>3</code> / <code>(3)</code> and similar. You can also paste whole rows copied from Excel (description + SKU + quantity). Missing quantity defaults to 1.',

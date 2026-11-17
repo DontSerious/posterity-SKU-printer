@@ -226,7 +226,10 @@ function setStatus(msg, kind) {
   el.classList.toggle('hidden', !msg);
 }
 
+let shotBlob = null;    // 当前那张截图，「A4 打印这张图」原样再传给 /api/print-sheet
+
 async function handleImage(blob) {
+  shotBlob = blob;
   const url = URL.createObjectURL(blob);
   $('shotImg').src = url;
   $('shot').classList.remove('hidden');
@@ -272,6 +275,29 @@ async function handleImage(blob) {
     }
   } catch (e) {
     setStatus(String(e.message || e), 'err');
+  }
+}
+
+// 截图整张印在一页 A4 上，给拣货的人拿着对照。永远走 A4 打印机（gw 上 CUPS 里的 EPSON），
+// 不看下拉里选的是谁：打标签时下拉一直停在标签机上。
+async function submitSheetPrint() {
+  if (!shotBlob) return;
+  const a4 = printerList.find((p) => p.kind === 'office');
+  if (!a4) { setStatus(t('shot.a4none'), 'err'); return; }
+  if (!confirm(t('shot.a4confirm', a4.name))) return;
+  const btn = $('shotA4');
+  btn.disabled = true;
+  const fd = new FormData();
+  fd.append('image', shotBlob, 'sheet.png');
+  try {
+    const res = await fetch('/api/print-sheet', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+    setStatus(t('shot.a4done', data.printer), 'ok');
+  } catch (e) {
+    setStatus(String(e.message || e), 'err');
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1015,6 +1041,8 @@ function bind() {
     $('drop').classList.remove('hidden');
     setStatus('');
   });
+
+  $('shotA4').addEventListener('click', submitSheetPrint);
 
   // 截图点一下放大到原始尺寸，方便和右边列表逐行对
   $('shotBox').addEventListener('click', () => $('shotBox').classList.toggle('zoom'));

@@ -75,6 +75,7 @@ kbd {
 
 .shotbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .shotbar .hint { margin: 0; }
+.shotbar button.narrow { margin: 0 8px 0 0; padding: 4px 12px; }
 .shotbox {
   border: 1px solid #e2e6ea; border-radius: 6px; background: #eef0f2;
   max-height: 68vh; overflow: auto;

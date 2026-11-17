@@ -394,6 +394,25 @@ def api_print_file():
     return jsonify(res)
 
 
+@app.post("/api/print-sheet")
+def api_print_sheet():
+    """把「上传截图」里那张订单截图整张印在一页 A4 上（A4 普通打印机，gw 上是 EPSON）。
+
+    不记配置、不记学习结果：它不是 SKU 标签，和下拉里选的打印机也无关。"""
+    import printing
+
+    img = _image_bytes_from_request()
+    if not img:
+        return jsonify({"ok": False, "error": "没有收到图片"}), 400
+    printer = printing.office_printer()
+    if not printer:
+        return jsonify({"ok": False, "error": "没有找到 A4 打印机（gw 上的 CUPS 队列）"}), 400
+    try:
+        return jsonify(printing.print_sheet(printer, img))
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": f"打印失败: {exc}"}), 500
+
+
 @app.post("/api/backfeed")
 def api_backfeed():
     """往回退一张纸。不出纸，只动走纸电机，所以不像 /api/print 那样记配置、记学习结果。"""
@@ -410,7 +429,7 @@ def api_backfeed():
 
 
 # --------------------------------------------------------------------------- #
-# 打印（唯一会出纸的接口）
+# 打印（SKU 标签；另外两个出纸的接口是上面的 /api/print-file 和 /api/print-sheet）
 # --------------------------------------------------------------------------- #
 
 @app.post("/api/print")

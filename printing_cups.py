@@ -3,7 +3,7 @@
 只在非 Windows 上被 printing.py 用到。标签机（CT-428D）不走这里，走 printing_tspl.py
 直写 —— 两条路并存，按打印机名分派：名字是 CUPS 队列名的走这里，其余走 TSPL。
 
-两种打印，都**不传任何缩放选项**。CUPS 文档（cups.org/doc/options.html「Scaling to Fit」）
+三种打印，都**不传任何缩放选项**（第三种「订单截图」的缩放在图里自己做，见 a4_fit_page）。CUPS 文档（cups.org/doc/options.html「Scaling to Fit」）
 原话是 "The default is to use the size specified in the file."：
 - SKU 标签：还是 label.py 那张 203dpi 的图（和网页预览同一张），这里把它贴在一张
   203dpi 的 A4 白底正中，存成页面正好是 A4 的 PDF。于是 60×30 mm 的标签在纸上就是
@@ -11,17 +11,19 @@
   原文（2026-11-11 查过），所以不靠它们，尺寸由 PDF 本身钉死。
 - 打印文件：上传的 PDF / 图片原样交给 CUPS，按文件自身的尺寸印在打印机的默认纸（A4）上。
   比 A4 大的页面 CUPS 怎么处理没有核过。
+- 订单截图：「上传截图」页的「A4 打印这张图」，截图缩放进一页 A4 PDF，见 print_sheet。
 
 用 `lp` / `lpstat` 命令行而不是 pycups：少一个要编译的依赖，CUPS 自带这两个命令。
 """
 
 from __future__ import annotations
 
+import io
 import os
 import subprocess
 import tempfile
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 _TIMEOUT = 15
 A4_MM = (210.0, 297.0)
@@ -85,6 +87,45 @@ def print_images(printer: str, pages: list, dpi: int, job_name: str) -> int:
                        append_images=sheets[1:])
         _lp(printer, path, 1, job_name)
     return len(sheets)
+
+
+SHEET_DPI = 300
+SHEET_MARGIN_MM = 10.0
+
+
+def a4_fit_page(img: Image.Image, dpi: int = SHEET_DPI) -> Image.Image:
+    """订单截图 → 一张竖版 A4：四边留 10 mm，等比缩放到正好放进可用区，靠上、水平居中。纯函数。
+
+    和 a4_pages 相反，这里**要**缩放：截图的像素没有物理尺寸，原样印出来只有邮票大，
+    小图也放大到满宽，好让人拿着纸逐行对照。竖版不转 90°：装箱单都是宽表，
+    转成横版字是大了，可拿在手里要歪着头看。
+    """
+    pw = int(round(A4_MM[0] / 25.4 * dpi))
+    ph = int(round(A4_MM[1] / 25.4 * dpi))
+    m = int(round(SHEET_MARGIN_MM / 25.4 * dpi))
+    g = ImageOps.exif_transpose(img)  # 手机拍的 JPG 按 EXIF 方向转正
+    if g.mode in ("RGBA", "LA", "P"):
+        # 透明处的底色常是黑的，直接 convert("RGB") 会印成一整块黑：先铺到白底上
+        g = g.convert("RGBA")
+        bg = Image.new("RGBA", g.size, "white")
+        g = Image.alpha_composite(bg, g)
+    g = g.convert("RGB")
+    s = min((pw - 2 * m) / g.width, (ph - 2 * m) / g.height)
+    g = g.resize((max(1, round(g.width * s)), max(1, round(g.height * s))), Image.LANCZOS)
+    page = Image.new("RGB", (pw, ph), "white")
+    page.paste(g, ((pw - g.width) // 2, m))
+    return page
+
+
+def print_sheet(printer: str, data: bytes, copies: int, job_name: str) -> str:
+    """截图（PNG/JPG 字节）按 a4_fit_page 排成一页 A4 PDF 交给 CUPS。返回 lp 的回执。
+
+    PDF 的页面尺寸由 resolution 钉成 A4，理由同 print_images：不靠 CUPS 的缩放选项。"""
+    page = a4_fit_page(Image.open(io.BytesIO(data)))
+    with tempfile.TemporaryDirectory(prefix="sku-cups-") as tmp:
+        path = os.path.join(tmp, "sheet.pdf")
+        page.save(path, "PDF", resolution=float(SHEET_DPI))
+        return _lp(printer, path, copies, job_name)
 
 
 def print_file(printer: str, data: bytes, filename: str, copies: int, job_name: str) -> str:
