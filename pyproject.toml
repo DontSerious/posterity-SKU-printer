@@ -16,3 +16,13 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+# `uv run pytest`: the pure text parsers in ocr.py only (no OCR model, no printer, no network).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
