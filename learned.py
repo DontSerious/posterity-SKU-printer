@@ -29,8 +29,7 @@ STORE_PATH = os.path.join(BASE_DIR, "learned.json")
 # 打印成功这类弱信号要攒够几次才敢当模糊匹配的目标。人工敲的不受此限。
 THRESHOLD = 2
 
-# 形近等价类。同一类里的字符互相可换 —— 模糊匹配只认这种差异，
-# 别的一律不认（WLA 和 WLB 是两个真实存在的型号，绝不能互相靠）。
+# ADR-0001
 _CONFUSE_GROUPS = ("O0QD", "I1L", "S5", "B8", "Z2", "G6", "T7")
 _CLASS = {ch: i for i, g in enumerate(_CONFUSE_GROUPS) for ch in g}
 

@@ -103,7 +103,7 @@ def a4_fit_page(img: Image.Image, dpi: int = SHEET_DPI) -> Image.Image:
     pw = int(round(A4_MM[0] / 25.4 * dpi))
     ph = int(round(A4_MM[1] / 25.4 * dpi))
     m = int(round(SHEET_MARGIN_MM / 25.4 * dpi))
-    g = ImageOps.exif_transpose(img)  # 手机拍的 JPG 按 EXIF 方向转正
+    g = ImageOps.exif_transpose(img)
     if g.mode in ("RGBA", "LA", "P"):
         # 透明处的底色常是黑的，直接 convert("RGB") 会印成一整块黑：先铺到白底上
         g = g.convert("RGBA")

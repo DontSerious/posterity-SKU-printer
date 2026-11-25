@@ -140,7 +140,7 @@ def _module_width(n_modules: int, canvas_w: int, avail_w: int, layout: Layout) -
         # 填不满：填满所需的模块宽已经细到解码不出来，退回整数宽
         return float(_auto_module(n_modules, canvas_w, avail_w))
     m = layout.module_px if layout.module_px and layout.module_px > 0 else _auto_module(n_modules, canvas_w, avail_w)
-    if n_modules * m > avail_w:  # 手动指定过大时收回来
+    if n_modules * m > avail_w:
         m = max(1, avail_w // n_modules)
     return float(m)
 

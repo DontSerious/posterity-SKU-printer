@@ -32,8 +32,7 @@ else:
 
 DMPAPER_USER = 256
 
-# 非 Windows 上每台打印机带一个 kind：label = 标签机（TSPL 直写），office = A4 普通打印机
-# （CUPS 队列）。ERP 打印桥只上报 label（用户 2026-11-11 定），见 erp_bridge.py。
+# ADR-0002
 
 
 def _is_cups(printer: str) -> bool:
@@ -279,7 +278,7 @@ def print_images(
         return {"ok": False, "error": "没有可打印的页面", "printed": 0}
 
     if _is_cups(printer):
-        # A4 打印机该拿原文件（print_file），不该拿缩到标签纸上的栅格图
+        # ADR-0002
         raise RuntimeError(f"{printer} 是普通打印机，文件要原样交给它（print_file）")
     if not WINDOWS:
         w_px, h_px = _tspl.canvas_px(paper.width_mm, paper.height_mm)

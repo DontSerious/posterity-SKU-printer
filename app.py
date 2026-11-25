@@ -205,8 +205,7 @@ def api_ocr():
             img,
             sku_regex=ocr_cfg.get("sku_regex", ocr_mod.DEFAULT_SKU_REGEX),
             min_score=float(ocr_cfg.get("min_score", ocr_mod.DEFAULT_MIN_SCORE)),
-            # 学到的纠错只作用在图片路径上。粘贴文本是人敲的，没有形近错，
-            # 拿字典去动它就是重蹈 3aac5c5 的覆辙（80-SS-BK → BO-SS-BK）。
+            # ADR-0001
             lookup=learned,
         )
     except Exception as exc:  # noqa: BLE001
@@ -341,8 +340,7 @@ def api_print_file():
     use_paper = request.form.get("use_paper") == "1"
     data = f.read()
 
-    # A4 普通打印机（gw 上的 EPSON，CUPS 队列）：原文件直接交给它，按文件自身尺寸印在
-    # 打印机的 A4 上，不走下面"栅格化再缩到标签纸上"那条路 —— 「标签纸」只管标签机。
+    # ADR-0002
     printer = request.form.get("printer") or ""
     if not dry_run and printer and printing.is_office_printer(printer):
         try:
@@ -445,7 +443,6 @@ def api_print():
     layout = payload.get("layout") or {}
     dry_run = bool(payload.get("dry_run"))
 
-    # 打印前把当前选择记下来，下次打开就是这套参数
     cfg = load_config()
     cfg["printer"] = payload.get("printer") or cfg.get("printer", "")
     cfg["paper"] = {
@@ -591,7 +588,7 @@ def _open_browser():
         except OSError:
             pass
     try:
-        webbrowser.open(URL)  # 系统 http 关联正常时走这条
+        webbrowser.open(URL)
     except Exception:  # noqa: BLE001
         pass
 

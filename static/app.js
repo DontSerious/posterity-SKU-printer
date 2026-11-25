@@ -4,7 +4,7 @@ let rows = [];          // {selected, description, sku, qty, low_confidence, qty
 let activeIndex = 0;
 let papers = [];
 let previewTimer = null;
-let lastRaw = null;     // 上次 OCR 的原文，切语言时要重画折叠标题
+let lastRaw = null;
 
 // --------------------------------------------------------------------------- //
 // 中英切换
@@ -32,7 +32,6 @@ function applyI18n() {
   });
   $('lang').textContent = t('app.langbtn');
 
-  // 动态生成的部分要重画
   syncRangeLabels();  // 「自动」这类值标签不是 data-i18n，得自己刷
   renderPaperOptions();
   renderPrinterOptions();
@@ -278,8 +277,7 @@ async function handleImage(blob) {
   }
 }
 
-// 截图整张印在一页 A4 上，给拣货的人拿着对照。永远走 A4 打印机（gw 上 CUPS 里的 EPSON），
-// 不看下拉里选的是谁：打标签时下拉一直停在标签机上。
+// ADR-0002
 async function submitSheetPrint() {
   if (!shotBlob) return;
   const a4 = printerList.find((p) => p.kind === 'office');
@@ -375,7 +373,7 @@ function switchTab(name) {
 
 let dbItems = null;          // null = 还没拉过；真打印成功后置回 null（可能自动入了库），下次切过来重拉
 const dbPicked = new Set();  // 勾选跨搜索保留：搜 A 勾两条、再搜 B 勾一条，一起加
-let dbEditing = null;        // 正在改的那条 SKU（行内变成输入框）
+let dbEditing = null;
 const DB_SHOW = 200;         // 一屏最多列这么多，再多就让人多敲几个字
 
 // 所有库操作都回整份清单，成功就换掉 dbItems 重画；失败把原因写在面板底下
@@ -484,7 +482,7 @@ async function saveDbEdit(sku, description) {
   const d = await dbCall('PUT', '/api/skus', { old_sku: old, sku: sku.trim(), description });
   if (!d) return;  // 撞名 / 空 SKU：留在编辑态，原因写在底下
   dbEditing = null;
-  if (dbPicked.delete(old)) dbPicked.add(sku.trim());  // 改名时勾选跟着走
+  if (dbPicked.delete(old)) dbPicked.add(sku.trim());
   renderDb();
 }
 
@@ -544,7 +542,6 @@ let pickedFile = null;   // File 对象；打印时原样再传给 /api/print-fi
 let pickedInfo = null;   // {pages, width_mm, height_mm, previews: [每页缩略图 data URL]}
 let filePage = 0;        // 下方「标签预览」显示的是第几页（点缩略图切换）
 
-// 每一页一张缩略图。点哪页，下方预览就换成哪页
 function renderFilePages() {
   const box = $('filePages');
   const list = (pickedInfo && pickedInfo.previews) || [];
@@ -678,8 +675,7 @@ function renderTable() {
     if (r.junk) tr.classList.add('junk');
     if (i === activeIndex) tr.classList.add('active');
 
-    // SKU 格下面挂一条小字：自动改了什么、或者有什么建议。
-    // 建议永远只是建议 —— 把一个真的新 SKU 静默改成旧的，那种错没人会发现。
+    // ADR-0001
     let hint = '';
     if (r.corrected_from) {
       hint = `<div class="hint fixed">${esc(t('row.fixed', r.corrected_from))}
@@ -746,8 +742,7 @@ function dropRow(i) {
 }
 
 function askDelete(tr, r, i) {
-  // 「误识别」和「这单不打」在操作上分不开，只能当场问一句。
-  // 猜错的代价不对称：把真 SKU 学成垃圾，以后会静默少打标签。
+  // ADR-0001
   tr.classList.add('asking');
   tr.innerHTML = `<td colspan="5" class="ask">
       <span>${esc(t('row.ask', r.sku.trim()))}</span>
@@ -880,7 +875,7 @@ async function doPreview() {
     $('binfo').textContent = [overWideWarning(),
       list.length > 1 ? t('file.page', filePage + 1, list.length) : '',
       fileFitText()].filter(Boolean).join('\n');
-    refreshSummary();  // 纸张变了，汇总里那句也要跟着变
+    refreshSummary();
     return;
   }
   const r = rows[activeIndex];
@@ -1023,7 +1018,6 @@ function bind() {
   document.querySelectorAll('.tab').forEach((el) =>
     el.addEventListener('click', () => switchTab(el.dataset.tab)));
   $('parseText').addEventListener('click', parseText);
-  // 在文本框里 Ctrl+Enter 直接解析
   $('text').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); parseText(); }
   });
@@ -1044,7 +1038,6 @@ function bind() {
 
   $('shotA4').addEventListener('click', submitSheetPrint);
 
-  // 截图点一下放大到原始尺寸，方便和右边列表逐行对
   $('shotBox').addEventListener('click', () => $('shotBox').classList.toggle('zoom'));
 
   $('printer').addEventListener('change', (e) => loadPapers(e.target.value, null));
@@ -1070,7 +1063,6 @@ function bind() {
     renderTable();
   });
 
-  // SKU 库页签
   $('dbQ').addEventListener('input', renderDb);
   $('dbQ').addEventListener('keydown', (e) => {
     // 回车 = 勾上唯一的那条搜索结果。只是勾选，加不加进列表还要点按钮
@@ -1088,7 +1080,6 @@ function bind() {
   $('dry').addEventListener('click', () => (fileMode() ? submitFilePrint(true) : submitPrint(true)));
   $('backfeed').addEventListener('click', submitBackfeed);
 
-  // 打印文件页签
   const dropF = $('dropFile');
   dropF.addEventListener('click', () => $('fileDoc').click());
   $('fileDoc').addEventListener('change', (e) => { if (e.target.files[0]) handleDocFile(e.target.files[0]); });

@@ -12,7 +12,7 @@
 [CmdletBinding()]
 param(
     [switch]$AtStartup,          # 开机启动（SYSTEM），而不是登录时启动
-    [switch]$AutoReload,         # 改 .py 后自动重启服务
+    [switch]$AutoReload,
     [int]$Port = 5000,
     [switch]$NoFirewall          # 不动防火墙
 )
@@ -26,7 +26,6 @@ function Fail($msg) { Write-Host "[错误] $msg" -ForegroundColor Red; exit 1 }
 function Ok($msg)   { Write-Host "[OK]   $msg" -ForegroundColor Green }
 function Info($msg) { Write-Host "       $msg" -ForegroundColor DarkGray }
 
-# --- 前置检查 -------------------------------------------------------------
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
         ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Fail "请用【管理员】PowerShell 运行：`n       powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`""
@@ -46,7 +45,6 @@ if (-not (Test-Path $Pythonw)) {
 }
 Ok "解释器: $Pythonw"
 
-# --- 计划任务 -------------------------------------------------------------
 $argLine = 'app.py --lan --no-browser --log logs\service.log'
 if ($AutoReload) { $argLine += ' --reload' }
 $action = New-ScheduledTaskAction -Execute $Pythonw -Argument $argLine -WorkingDirectory $Dir
@@ -71,7 +69,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal -Description 'SKU 条码打印，局域网后台服务' -Force | Out-Null
 Ok "已注册计划任务「$TaskName」 —— $mode"
 
-# --- 防火墙 ---------------------------------------------------------------
 if ($NoFirewall) {
     Info "按要求跳过防火墙设置（同事可能连不上）"
 } elseif (Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue) {
@@ -82,7 +79,6 @@ if ($NoFirewall) {
     Ok "已放行入站 TCP $Port"
 }
 
-# --- 立即启动并自检 -------------------------------------------------------
 Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
     ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
 Start-ScheduledTask -TaskName $TaskName

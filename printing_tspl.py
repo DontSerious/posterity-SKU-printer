@@ -41,7 +41,7 @@ _SETUP = (
     "SPEED 5.00",
     "DENSITY 10",
     "OFFSET 0.00 mm",
-    "GAP 3.48 mm,0.0 mm",  # 改这里要连 GAP_MM 一起改
+    "GAP 3.48 mm,0.0 mm",
 )
 
 # 驱动把一张图切成多条 BITMAP：90×50（每行 90 字节、400 行）切成 280 + 120 行。
@@ -172,7 +172,6 @@ def encode_job(pages: list[tuple[Image.Image, int]], width_mm: float, height_mm:
     return bytes(out)
 
 
-# 纸间隙，和 _SETUP 里的 GAP 同一个数。回退一张 = 标签高 + 间隙。
 GAP_MM = 3.48
 
 

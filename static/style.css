@@ -33,7 +33,6 @@ section { background: #fff; border: 1px solid #e2e6ea; border-radius: 8px; paddi
 
 h2 { font-size: 14px; margin: 0 0 10px; color: #47505b; }
 
-/* ---------- 页签 ---------- */
 .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #e2e6ea; }
 .tab {
   background: none; border: none; border-bottom: 2px solid transparent;
@@ -55,7 +54,6 @@ code {
 .kbdhint { opacity: .6; font-weight: 400; font-size: 11px; }
 .rawmode { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: #5b646f; }
 
-/* ---------- 上传 / 截图 ---------- */
 .drop {
   border: 2px dashed #c3cbd4;
   border-radius: 8px;
@@ -83,7 +81,6 @@ kbd {
 .shotbox img { display: block; width: 100%; height: auto; cursor: zoom-in; }
 .shotbox.zoom img { width: auto; max-width: none; cursor: zoom-out; }
 
-/* ---------- 列表 ---------- */
 .listhead { display: flex; justify-content: space-between; align-items: center; }
 .listhead h2 { margin: 0; }
 
@@ -128,7 +125,6 @@ tr.junk td input.sku { color: #98a1ab; }
 td.ask { padding: 9px 10px; background: #fffaea; font-size: 12px; color: #5b646f; }
 td.ask button.link { margin-left: 12px; }
 
-/* 学到的纠错 —— 管理面板 */
 .learned { font-size: 12px; padding: 4px 2px 2px; }
 .lsec { margin: 6px 0 10px; }
 .lsec h4 { margin: 0 0 5px; font-size: 12px; font-weight: 600; color: #5b646f; }
@@ -151,7 +147,6 @@ button.link.lx { color: #c0392b; font-size: 13px; line-height: 1; }
   font: 12px/1.6 Consolas, monospace; color: #47505b; white-space: pre-wrap;
 }
 
-/* ---------- 下半：打印设置 ---------- */
 .settings {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -195,7 +190,6 @@ td button.del { background: none; border: none; color: #b34141; cursor: pointer;
 .result.ok { color: #1c6b39; }
 .result.err { color: #a02020; }
 
-/* 打印文件页签 */
 .filego { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .filego label.inline { display: flex; gap: 6px; align-items: center; margin: 0; }
 .filego input[type="number"] { width: 70px; }
@@ -214,7 +208,6 @@ td button.del { background: none; border: none; color: #b34141; cursor: pointer;
 .filepages img { display: block; width: 100%; height: auto; }
 .filepages figcaption { font-size: 11px; color: #77808c; margin-top: 4px; }
 
-/* SKU 库页签 */
 input.dbq {
   width: 100%; padding: 8px 10px; border: 1px solid #dde2e8; border-radius: 6px;
   font: 13px Consolas, "Cascadia Mono", monospace; background: #fafbfc;
