@@ -286,3 +286,8 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 - 四边留 10 mm，等比缩放到正好放进 A4、靠上（`printing_cups.a4_fit_page`）。装箱单是宽表，一般顶满 A4 宽；
   特别长的截图由高度决定，会比 A4 窄。300 dpi 的一页 PDF 交给 `lp`。透明 PNG 铺白底，手机照片按 EXIF 转正。
 - 有二次确认；不记配置、不记学习结果。没有 A4 打印机（Windows 上）时报错，不出纸。
+
+## 推送前检查
+
+`hooks/pre-push` 在推送前跑 `uv run pytest -q` 和 `checks/tspl_capture.py`（合起来不到两秒），红了 git 就拒绝推送。
+**不自动装**：在仓库根目录跑一次 `ln -sf "$PWD/hooks/pre-push" "$(git rev-parse --git-path hooks/pre-push)"`。
