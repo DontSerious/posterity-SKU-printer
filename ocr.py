@@ -118,12 +118,7 @@ def normalize_sku(text: str, correct_ocr: bool = True) -> str:
 
     fixed = []
     for seg in s.split("-"):
-        # 只有「段内本来就有真数字」时，才敢把剩下的字母往数字推（O1 → 01）。
-        #
-        # 从前这里还做两件事，都已删掉，因为毁的比救的多：
-        #   · 尾段两解时一律当流水号 → MCH-SS 被毁成 MCH-55、PHC-ELE-BS → -85
-        #   · 反向的 0→O 1→I 整段推断 → V2 被毁成 VZ、A1B → AIB、80- → BO-
-        # 代价是 8K → BK 这类首字符误读不再自动纠，交给 learned.py 的字典。
+        # ADR-0001
         as_digit = seg.translate(_ALPHA_TO_DIGIT)
         if as_digit.isdigit() and any(c.isdigit() for c in seg):
             fixed.append(as_digit)
@@ -383,11 +378,9 @@ def parse_rows(items, sku_regex: str = DEFAULT_SKU_REGEX, min_score: float = DEF
                 sku_idx, sku_val = i, cand
                 break
         if sku_idx is None:
-            continue  # 表头行、标题行、空行都在这里被自然过滤掉
+            continue
 
-        # 合并裁决：`MCH-SS` + `V2` → 字典里确实有 `MCH-SS V2` 才认，否则不猜。
-        # 空格既可能是列分隔符、又可能是 SKU 内的字符，没有哪条规则分得干净
-        # （猜错的后果是把 `US-PRO-06` 和数量列 `1` 粘成假 SKU），只有字典能裁。
+        # ADR-0001
         sku_end = sku_idx
         if lookup is not None:
             probe = row[sku_idx]["text"].strip()
