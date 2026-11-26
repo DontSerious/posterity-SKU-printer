@@ -11,8 +11,8 @@ is under test. A row that only the code documents is not here.
     README.md:24     认不出 SKU 的行不会静默丢掉，会列出来
     README.md:25-27  「按原文」: SC,ABC stays SC,ABC; only an explicit trailing X3 / (3) is a quantity
     README.md:28     标黄 = 置信度低或数量没读到
-    README.md:245    "min_score": 0.85 — rows below it are yellow
     README.md:220    pasted text is typed by a person: no look-alike correction (test_pasted_text_is_not_homoglyph_corrected)
+    README.md:245    "min_score": 0.85 — rows below it are yellow
     README.md:249    default SKU shape; case kept (UK4-SS-mn-GL-AU-BK, `mn` is lowercase)
 
 Run: uv run pytest

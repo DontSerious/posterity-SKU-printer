@@ -266,7 +266,7 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 
 ## 装箱单截图（Packing list）与 A4 打印
 
-> 这一节放在文件末尾是故意的：`tests/test_parse_text.py` 按行号引用上面的段落，往上面插行会让那些引用错位。
+> 这一节和它后面的节放在被引用的段落之后是故意的：`tests/test_parse_text.py` 按行号引用上面的段落，往上面插行会让那些引用错位；新的一节加在文件末尾。
 
 **识别**：截图里有一格叫 `SKU` 的表头，就按表头认列（`ocr._find_header`）：
 
@@ -289,5 +289,5 @@ gw 上没有厂商驱动，也不装 CUPS。`printing_tspl.py` 把同一张 203d
 
 ## 推送前检查
 
-`hooks/pre-push` 在推送前跑 `uv run pytest -q` 和 `checks/tspl_capture.py`（合起来不到两秒），红了 git 就拒绝推送。
+`hooks/pre-push` 在推送前跑 `uv run pytest -q` 和 `checks/tspl_capture.py`（2026-11-26 在 WSL 上量：机器负载 20 以上时 3.5～4.4 秒，空闲时约 2 秒），红了 git 就拒绝推送。
 **不自动装**：在仓库根目录跑一次 `ln -sf "$PWD/hooks/pre-push" "$(git rev-parse --git-path hooks/pre-push)"`。
