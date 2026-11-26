@@ -12,6 +12,7 @@ is under test. A row that only the code documents is not here.
     README.md:25-27  「按原文」: SC,ABC stays SC,ABC; only an explicit trailing X3 / (3) is a quantity
     README.md:28     标黄 = 置信度低或数量没读到
     README.md:245    "min_score": 0.85 — rows below it are yellow
+    README.md:220    pasted text is typed by a person: no look-alike correction (test_pasted_text_is_not_homoglyph_corrected)
     README.md:249    default SKU shape; case kept (UK4-SS-mn-GL-AU-BK, `mn` is lowercase)
 
 Run: uv run pytest
@@ -108,6 +109,20 @@ def test_default_mode_cannot_keep_sc_comma_abc():
 def test_raw_mode(line, sku, qty, detected):
     r = one(line, raw=True)
     assert (r["sku"], r["qty"], r["qty_detected"]) == (sku, qty, detected)
+
+
+@pytest.mark.parametrize("line,sku", [
+    ("PHC-O1-BK X2", "PHC-O1-BK"),
+    ("80-SS-BK 2", "80-SS-BK"),
+])
+def test_pasted_text_is_not_homoglyph_corrected(line, sku):
+    r = one(line)
+    assert r["sku"] == sku
+    assert r["sku_raw"] == sku
+
+
+def test_the_image_path_does_correct_the_same_sku_so_the_paste_test_can_fail():
+    assert ocr.normalize_sku("PHC-O1-BK", correct_ocr=True) == "PHC-01-BK"
 
 
 # -- README.md:249 --------------------------------------------------------------
